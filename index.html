@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<title>Apps INGECO</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Apps INGECO">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --surface-2: #f1f5f9;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: #e2e8f0;
+    --primary: #0f172a;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-lg: 0 6px 18px rgba(0,0,0,0.10);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100%;
+  }
+  body { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+
+  header {
+    background: var(--primary);
+    color: white;
+    padding: 18px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header .brand {
+    font-size: 16px; font-weight: 800; letter-spacing: 2px;
+  }
+  header .brand small { font-weight: 400; opacity: 0.7; letter-spacing: 0.5px; }
+
+  main { padding: 20px 16px 60px; max-width: 760px; margin: 0 auto; }
+
+  .hero {
+    text-align: center; padding: 14px 0 22px;
+  }
+  .hero h1 {
+    margin: 0 0 6px; font-size: 28px; font-weight: 800; color: var(--text);
+  }
+  .hero p {
+    margin: 0; color: var(--muted); font-size: 14px;
+  }
+
+  /* Grid de apps */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+  }
+  .tile {
+    display: flex; flex-direction: column; align-items: stretch;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 0;
+    box-shadow: var(--shadow);
+    text-decoration: none; color: inherit;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.05s ease, box-shadow 0.15s ease;
+  }
+  .tile:active { transform: scale(0.98); }
+  .tile:hover  { box-shadow: var(--shadow-lg); }
+
+  .tile .icon-area {
+    display: flex; align-items: center; justify-content: center;
+    height: 86px;
+    font-size: 38px;
+  }
+  .tile .body {
+    padding: 12px 14px 14px;
+    text-align: left;
+  }
+  .tile .name {
+    font-size: 15px; font-weight: 800; color: var(--text);
+    letter-spacing: 0.3px;
+  }
+  .tile .role {
+    font-size: 13px; color: var(--muted); margin-top: 2px;
+    line-height: 1.3;
+  }
+
+  /* Color por app */
+  .tile.green   .icon-area { background: #e8f5ec; color: #0f5e2d; }
+  .tile.blue    .icon-area { background: #dbeafe; color: #1e40af; }
+  .tile.orange  .icon-area { background: #ffedd5; color: #c2410c; }
+  .tile.purple  .icon-area { background: #ede9fe; color: #6d28d9; }
+  .tile.cyan    .icon-area { background: #cffafe; color: #0e7490; }
+  .tile.amber   .icon-area { background: #fef3c7; color: #92400e; }
+
+  .footer-note {
+    margin-top: 30px; text-align: center;
+    color: var(--muted); font-size: 12px;
+  }
+  .footer-note code {
+    background: var(--surface-2); padding: 2px 6px; border-radius: 4px;
+    font-size: 11px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">APPS <small>INGECO</small></div>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>Mis apps</h1>
+    <p>Acceso rápido a todas las herramientas</p>
+  </div>
+
+  <div class="grid" id="appsGrid"></div>
+
+  <div class="footer-note">
+    Para sumar una app nueva, editá <code>index.html</code> en el repo.
+  </div>
+</main>
+
+<script>
+const APPS = [
+  {
+    name: 'PAVIMAX',
+    role: 'App operario',
+    url:  'https://marcoskatz-cmd.github.io/pavimax/',
+    icon: '📦',
+    color: 'green'
+  },
+  {
+    name: 'PAVIMAX',
+    role: 'Oficina (cargar pedidos)',
+    url:  'https://marcoskatz-cmd.github.io/pavimax/cargar.html',
+    icon: '🏢',
+    color: 'green'
+  },
+  {
+    name: 'INGECOV',
+    role: 'Mantenimiento de flota',
+    url:  'https://marcoskatz-cmd.github.io/ingecov/',
+    icon: '🚛',
+    color: 'blue'
+  },
+  {
+    name: 'Bacheo',
+    role: 'Gestión de bacheo',
+    url:  'PEGAR_URL_BACHEO',
+    icon: '🚧',
+    color: 'orange'
+  }
+];
+
+const grid = document.getElementById('appsGrid');
+APPS.forEach(app => {
+  const a = document.createElement('a');
+  a.className = 'tile ' + (app.color || '');
+  a.href = app.url;
+  a.innerHTML = `
+    <div class="icon-area">${app.icon}</div>
+    <div class="body">
+      <div class="name"></div>
+      <div class="role"></div>
+    </div>
+  `;
+  a.querySelector('.name').textContent = app.name;
+  a.querySelector('.role').textContent = app.role;
+  // Si la URL es un placeholder, deshabilitar el tile
+  if (app.url.startsWith('PEGAR_')) {
+    a.style.opacity = '0.5';
+    a.style.cursor  = 'not-allowed';
+    a.addEventListener('click', e => { e.preventDefault(); alert('URL pendiente — editá APPS en index.html'); });
+  }
+  grid.appendChild(a);
+});
+
+/* PWA: registrar service worker */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('service-worker.js').catch(() => {});
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "Apps INGECO",
+  "short_name": "Apps INGECO",
+  "description": "Hub de acceso a las apps de trabajo de INGECO",
+  "lang": "es-AR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f8fa",
+  "theme_color": "#0f172a",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
