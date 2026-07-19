@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+<title>Ingeco - Demarcación Vial</title>
+<link rel="icon" href="icon-192.png">
+<style>
+  html, body { margin:0; height:100%; background:#1f3a5f; }
+  #app { border:0; width:100%; height:100%; display:block; }
+  #fallback {
+    position:fixed; bottom:8px; left:50%; transform:translateX(-50%);
+    font:13px -apple-system,'Segoe UI',Roboto,sans-serif; color:#fff;
+    opacity:.85; text-decoration:underline; z-index:2;
+  }
+</style>
+</head>
+<body>
+<!-- Se embebe la Web App de Apps Script en un iframe para evitar el error de
+     "multi-login" de Google: en contexto de iframe de otro dominio, Google
+     sirve la versión pública anónima y no intenta rutear por /u/N de cuenta.
+     El backend habilita esto con setXFrameOptionsMode(ALLOWALL). -->
+<iframe id="app" allow="geolocation; camera; fullscreen"></iframe>
+<a id="fallback" target="_blank" rel="noopener">Abrir en pestaña nueva</a>
+<script>
+  var BASE = 'https://script.google.com/macros/s/AKfycbzSnsvUMB_WHgoMRYn8A7DhIAkf7yuhoDXV5I1zNd-pBMWkI6055uD-NM1ouzHI82hY/exec';
+  var full = BASE + window.location.search; // pasa ?vista=monitoreo si viene
+  document.getElementById('app').src = full;
+  document.getElementById('fallback').href = full;
+</script>
+</body>
+</html>
