@@ -36,6 +36,22 @@
   .spinner { display:inline-block; width:14px; height:14px; border:2px solid #cdd5df; border-top-color:#1f3a5f; border-radius:50%; animation:sp .8s linear infinite; margin-right:8px; }
   .spinner.white { border-color:rgba(255,255,255,.4); border-top-color:#fff; }
   @keyframes sp { to { transform:rotate(360deg); } }
+  .chips { display:flex; gap:8px; margin-bottom:12px; }
+  .chip { flex:1; padding:9px 4px; border-radius:20px; border:1px solid #cdd5df; background:#fff; font-size:13px; cursor:pointer; text-align:center; }
+  .chip.on { background:#1f3a5f; color:#fff; border-color:#1f3a5f; }
+  .item { display:flex; gap:10px; background:#fff; border-radius:12px; padding:10px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.04); cursor:pointer; border-left:4px solid transparent; }
+  .item.mio { border-left-color:#e85d2c; }
+  .item img { width:64px; height:64px; object-fit:cover; border-radius:8px; background:#edf2f7; flex-shrink:0; }
+  .item .info { flex:1; min-width:0; }
+  .item .calle { font-weight:600; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #det-calle { font-weight:600; font-size:15px; }
+  .item .meta { font-size:12px; color:#4a5568; margin-top:2px; }
+  .estado { display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:10px; margin-top:4px; }
+  .estado.pend { background:#fdece4; color:#c54c1f; }
+  .estado.ok { background:#edf2f7; color:#4a5568; }
+  .empty { text-align:center; color:#718096; font-size:14px; padding:30px 10px; }
+  .btn-hist { background:none; border:0; color:#fff; font-size:20px; padding:4px 8px; cursor:pointer; border-radius:8px; }
+  .btn-hist:active { background:rgba(255,255,255,.1); }
 </style>
 </head>
 <body>
@@ -44,6 +60,7 @@
   <button id="btn-back" class="back" style="display:none;">‹</button>
   <img class="logo" id="logo" alt="INGECO">
   <h1 id="titulo">Demarcación Vial</h1>
+  <button id="btn-hist" class="btn-hist" style="display:none;" title="Historial">🗂</button>
 </header>
 
 <main>
@@ -105,6 +122,15 @@
 
     <button class="btn-primary" id="btn-guardar">Guardar trabajo</button>
   </section>
+
+  <section id="view-historial" class="view">
+    <div class="chips">
+      <button class="chip on" data-filtro="pendientes">Pendientes</button>
+      <button class="chip" data-filtro="mios">Míos</button>
+      <button class="chip" data-filtro="todos">Todos</button>
+    </div>
+    <div id="lista-hist"><p class="empty"><span class="spinner"></span>Cargando...</p></div>
+  </section>
 </main>
 
 <div id="toast" class="toast"></div>
@@ -122,7 +148,7 @@
   const ENDPOINT = 'https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec';
 
   const $ = id => document.getElementById(id);
-  const estado = { pin:null, operario:null, lat:null, lon:null, accuracy:null, fotos:{ antes:null } };
+  const estado = { pin:null, operario:null, lat:null, lon:null, accuracy:null, fotos:{ antes:null }, trabajos:[], filtro:'pendientes' };
 
   // text/plain a propósito: Apps Script no responde preflight CORS.
   async function api(accion, extra) {
@@ -175,9 +201,57 @@
   function mostrar(vista) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     $('view-' + vista).classList.add('active');
-    $('btn-back').style.display = (vista === 'carga') ? 'block' : 'none';
+    $('btn-back').style.display = (vista === 'login') ? 'none' : 'block';
+    $('btn-hist').style.display = (vista === 'carga') ? 'block' : 'none';
   }
-  function volver() { detenerGps(); mostrar('login'); }
+  function volver() {
+    const actual = document.querySelector('.view.active').id;
+    if (actual === 'view-historial') { mostrar('carga'); return; }
+    detenerGps(); mostrar('login');
+  }
+
+  // ─── Historial ─────────────────────────────────────────
+  function driveId(url) { const m = String(url).match(/[-\w]{25,}/); return m ? m[0] : ''; }
+  function driveThumb(url, w) { const id = driveId(url); return id ? ('https://drive.google.com/thumbnail?id=' + id + '&sz=w' + (w||200)) : ''; }
+
+  async function cargarHistorial() {
+    $('lista-hist').innerHTML = '<p class="empty"><span class="spinner"></span>Cargando...</p>';
+    try {
+      estado.trabajos = await api('listarTrabajosOperario', { pin: estado.pin, operario: estado.operario });
+      renderHistorial();
+    } catch (err) {
+      $('lista-hist').innerHTML = '<p class="empty">Error al cargar: ' + esc(err.message || err) + '</p>';
+    }
+  }
+
+  function renderHistorial() {
+    const f = estado.filtro;
+    const rows = (estado.trabajos || []).filter(t =>
+      f === 'pendientes' ? t.pendiente :
+      f === 'mios' ? String(t.operario).trim() === String(estado.operario).trim() : true);
+
+    if (!rows.length) {
+      const msg = f === 'pendientes' ? 'No hay trabajos esperando la foto del después.'
+                : f === 'mios' ? 'Todavía no cargaste ningún trabajo.'
+                : 'No hay trabajos cargados.';
+      $('lista-hist').innerHTML = '<p class="empty">' + msg + '</p>';
+      return;
+    }
+
+    const fmt = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); };
+    $('lista-hist').innerHTML = rows.map(t => {
+      const mio = String(t.operario).trim() === String(estado.operario).trim();
+      const thumb = driveThumb(t.fotoAntes, 120);
+      return '<div class="item' + (mio ? ' mio' : '') + '" data-id="' + esc(t.id) + '">'
+        + (thumb ? '<img src="' + thumb + '" onerror="this.style.visibility=\'hidden\'" alt="">' : '<img alt="">')
+        + '<div class="info">'
+        + '<div class="calle">' + esc(t.calle || (t.lat + ', ' + t.lon)) + '</div>'
+        + '<div class="meta">' + fmt(t.fecha) + ' · ' + esc(t.tipoTrabajo) + ' · ' + t.m2 + ' m²</div>'
+        + '<div class="meta">' + esc(t.operario) + '</div>'
+        + '<span class="estado ' + (t.pendiente ? 'pend">FALTA DESPUÉS' : 'ok">COMPLETO') + '</span>'
+        + '</div></div>';
+    }).join('');
+  }
 
   // ─── GPS ───────────────────────────────────────────────
   let watchId = null;
@@ -251,6 +325,13 @@
   $('btn-guardar').addEventListener('click', guardar);
   $('btn-foto-antes').addEventListener('click', () => $('file-antes').click());
   $('file-antes').addEventListener('change', e => onFoto(e, 'antes'));
+  $('btn-hist').addEventListener('click', () => { estado.filtro = 'pendientes'; mostrar('historial'); cargarHistorial(); });
+  document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+    c.classList.add('on');
+    estado.filtro = c.dataset.filtro;
+    renderHistorial();
+  }));
 </script>
 </body>
 </html>
