@@ -246,7 +246,7 @@
         + (thumb ? '<img src="' + thumb + '" onerror="this.style.visibility=\'hidden\'" alt="">' : '<img alt="">')
         + '<div class="info">'
         + '<div class="calle">' + esc(t.calle || (t.lat + ', ' + t.lon)) + '</div>'
-        + '<div class="meta">' + fmt(t.fecha) + ' · ' + esc(t.tipoTrabajo) + ' · ' + t.m2 + ' m²</div>'
+        + '<div class="meta">' + fmt(t.fecha) + ' · ' + esc(t.tipoTrabajo) + ' · ' + esc(t.m2) + ' m²</div>'
         + '<div class="meta">' + esc(t.operario) + '</div>'
         + '<span class="estado ' + (t.pendiente ? 'pend">FALTA DESPUÉS' : 'ok">COMPLETO') + '</span>'
         + '</div></div>';
