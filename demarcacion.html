@@ -131,6 +131,51 @@
     </div>
     <div id="lista-hist"><p class="empty"><span class="spinner"></span>Cargando...</p></div>
   </section>
+
+  <section id="view-detalle" class="view">
+    <div class="card">
+      <div id="det-calle" class="calle"></div>
+      <div id="det-meta" class="gps-accuracy"></div>
+      <img id="det-antes" class="preview show" alt="antes">
+    </div>
+
+    <div class="card">
+      <div class="foto-slot">
+        <label class="tit">Foto DESPUÉS</label>
+        <input id="file-det-despues" type="file" accept="image/*" capture="environment" style="display:none;">
+        <button class="btn-secondary" id="btn-det-despues">📷 Sacar foto después</button>
+        <img id="det-despues" class="preview" alt="despues">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="input-row">
+        <label for="det-tipo-trabajo">Tipo de trabajo</label>
+        <select id="det-tipo-trabajo">
+          <option>Línea longitudinal</option><option>Senda peatonal</option>
+          <option>Flecha</option><option>Cordón</option><option>Leyenda</option><option>Otro</option>
+        </select>
+      </div>
+      <div class="input-row">
+        <label for="det-tipo-pintura">Tipo de pintura</label>
+        <select id="det-tipo-pintura"><option>Termoplástica 3mm</option><option>Acrílica</option></select>
+      </div>
+      <div class="input-row">
+        <label for="det-color">Color</label>
+        <select id="det-color"><option>Blanco</option><option>Amarillo</option></select>
+      </div>
+      <div class="input-row">
+        <label for="det-m2">Metros cuadrados (m²)</label>
+        <input id="det-m2" type="number" inputmode="decimal" min="0" step="0.1">
+      </div>
+      <div class="input-row" style="margin:0;">
+        <label for="det-obs">Observaciones (opcional)</label>
+        <textarea id="det-obs" rows="2"></textarea>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="btn-det-guardar" disabled>Guardar cambios</button>
+  </section>
 </main>
 
 <div id="toast" class="toast"></div>
@@ -206,6 +251,7 @@
   }
   function volver() {
     const actual = document.querySelector('.view.active').id;
+    if (actual === 'view-detalle') { mostrar('historial'); return; }
     if (actual === 'view-historial') { mostrar('carga'); return; }
     detenerGps(); mostrar('login');
   }
@@ -253,6 +299,61 @@
     }).join('');
   }
 
+  // ─── Detalle / edición ─────────────────────────────────
+  function abrirDetalle(id) {
+    const t = (estado.trabajos || []).filter(x => x.id === id)[0];
+    if (!t) { toast('No se encontró el trabajo'); return; }
+    estado.detalle = { id: id, fotoDespues: null };
+
+    $('det-calle').textContent = t.calle || (t.lat + ', ' + t.lon);
+    const fmt = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); };
+    let meta = 'Cargado por ' + t.operario + ' · ' + fmt(t.fecha);
+    if (t.editadoPor) meta += ' · editado por ' + t.editadoPor + ' el ' + fmt(t.editadoEn);
+    $('det-meta').textContent = meta;
+    $('det-antes').src = driveThumb(t.fotoAntes, 800);
+
+    const dsp = $('det-despues');
+    if (t.fotoDespues) { dsp.src = driveThumb(t.fotoDespues, 800); dsp.classList.add('show'); }
+    else { dsp.src = ''; dsp.classList.remove('show'); }
+    $('btn-det-despues').textContent = t.fotoDespues ? '📷 Reemplazar foto después' : '📷 Sacar foto después';
+
+    $('det-tipo-trabajo').value = t.tipoTrabajo;
+    $('det-tipo-pintura').value = t.tipoPintura;
+    $('det-color').value = t.color;
+    $('det-m2').value = t.m2;
+    $('det-obs').value = t.obs;
+    $('file-det-despues').value = '';
+    $('btn-det-guardar').disabled = true;
+
+    mostrar('detalle');
+  }
+
+  // El botón se habilita solo cuando hay un cambio real, para que nadie
+  // estampe una edición (y su rastro) sin querer.
+  function marcarCambio() { $('btn-det-guardar').disabled = false; }
+
+  async function guardarCambios() {
+    const d = estado.detalle; if (!d) return;
+    const m2 = parseFloat($('det-m2').value);
+    if (!(m2 > 0)) { toast('Cargá los m² (mayor a 0)'); return; }
+    const btn = $('btn-det-guardar'); btn.disabled = true; btn.innerHTML = '<span class="spinner white"></span>Guardando...';
+    try {
+      const payload = {
+        pin: estado.pin, operario: estado.operario, id: d.id,
+        tipoTrabajo: $('det-tipo-trabajo').value, tipoPintura: $('det-tipo-pintura').value,
+        color: $('det-color').value, m2: m2, obs: $('det-obs').value.trim()
+      };
+      if (d.fotoDespues) payload.fotoDespues = d.fotoDespues;
+      await api('actualizarTrabajo', { payload: payload });
+      toast('✓ Cambios guardados');
+      mostrar('historial');
+      await cargarHistorial();
+    } catch (err) {
+      toast('Error: ' + (err.message || err), 4000);
+      btn.disabled = false;
+    } finally { btn.textContent = 'Guardar cambios'; }
+  }
+
   // ─── GPS ───────────────────────────────────────────────
   let watchId = null;
   function iniciarGps() {
@@ -277,8 +378,14 @@
     const f = e.target.files[0]; if (!f) return;
     const reader = new FileReader();
     reader.onload = ev => comprimir(ev.target.result).then(d => {
-      estado.fotos[cual] = d;
-      const p = $('prev-' + cual); p.src = d; p.classList.add('show');
+      if (cual === 'det-despues') {
+        estado.detalle.fotoDespues = d;
+        marcarCambio();
+      } else {
+        estado.fotos[cual] = d;
+      }
+      const p = $('prev-' + cual) || $(cual);
+      p.src = d; p.classList.add('show');
     }).catch(() => toast('No se pudo procesar la foto'));
     reader.readAsDataURL(f);
   }
@@ -332,6 +439,15 @@
     estado.filtro = c.dataset.filtro;
     renderHistorial();
   }));
+
+  $('lista-hist').addEventListener('click', e => {
+    const it = e.target.closest('.item'); if (it) abrirDetalle(it.dataset.id);
+  });
+  $('btn-det-despues').addEventListener('click', () => $('file-det-despues').click());
+  $('file-det-despues').addEventListener('change', e => onFoto(e, 'det-despues'));
+  $('btn-det-guardar').addEventListener('click', guardarCambios);
+  ['det-tipo-trabajo','det-tipo-pintura','det-color','det-m2','det-obs']
+    .forEach(id => $(id).addEventListener('input', marcarCambio));
 </script>
 </body>
 </html>
