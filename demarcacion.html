@@ -6,33 +6,258 @@
 <title>Ingeco - Demarcación Vial</title>
 <link rel="icon" href="icon-192.png">
 <style>
-  html, body { margin:0; height:100%; background:#1f3a5f; }
-  #app { border:0; width:100%; height:100%; display:block; }
-  #fallback {
-    position:fixed; bottom:8px; left:50%; transform:translateX(-50%);
-    font:13px -apple-system,'Segoe UI',Roboto,sans-serif; color:#fff;
-    opacity:.85; text-decoration:underline; z-index:2;
-  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f4f5f7; color:#1f2933; -webkit-font-smoothing:antialiased; overscroll-behavior:none; }
+  header { background:#1f3a5f; color:#fff; padding:12px 14px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:10; }
+  header img.logo { height:26px; }
+  header h1 { margin:0; font-size:16px; font-weight:600; flex:1; }
+  .back { background:none; border:0; color:#fff; font-size:26px; line-height:1; padding:4px 10px; cursor:pointer; border-radius:8px; }
+  .back:active { background:rgba(255,255,255,.1); }
+  main { padding:16px; max-width:960px; margin:0 auto; }
+  .view { display:none; } .view.active { display:block; }
+  .card { background:#fff; border-radius:12px; padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .btn-primary { width:100%; padding:16px; border-radius:12px; border:0; background:#e85d2c; color:#fff; font-size:17px; font-weight:600; cursor:pointer; margin-top:12px; }
+  .btn-primary:disabled { background:#c0c0c0; cursor:not-allowed; }
+  .btn-primary:active:not(:disabled) { background:#c54c1f; }
+  .btn-secondary { width:100%; padding:14px; border-radius:12px; border:1px solid #cdd5df; background:#fff; color:#1f2933; font-size:15px; cursor:pointer; margin-top:8px; }
+  .input-row { margin-bottom:14px; }
+  .input-row label { display:block; font-size:13px; color:#4a5568; margin-bottom:4px; }
+  .input-row input, .input-row select, .input-row textarea { width:100%; padding:12px; border-radius:10px; border:1px solid #cdd5df; font-size:16px; -webkit-appearance:none; background:#fff; font-family:inherit; }
+  .input-row textarea { resize:vertical; min-height:64px; }
+  .gps-status { font-size:14px; color:#4a5568; margin-bottom:6px; }
+  .gps-coords { font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; color:#1f3a5f; }
+  .gps-accuracy { font-size:12px; color:#718096; margin-top:2px; }
+  .foto-slot { margin-top:10px; }
+  .foto-slot label.tit { font-weight:600; font-size:14px; color:#1f2933; }
+  .preview { width:100%; border-radius:10px; margin-top:8px; display:none; }
+  .preview.show { display:block; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1f2933; color:#fff; padding:12px 20px; border-radius:24px; font-size:14px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:2000; max-width:90%; text-align:center; }
+  .toast.show { opacity:1; }
+  .spinner { display:inline-block; width:14px; height:14px; border:2px solid #cdd5df; border-top-color:#1f3a5f; border-radius:50%; animation:sp .8s linear infinite; margin-right:8px; }
+  .spinner.white { border-color:rgba(255,255,255,.4); border-top-color:#fff; }
+  @keyframes sp { to { transform:rotate(360deg); } }
 </style>
 </head>
 <body>
-<!-- Se embebe la Web App de Apps Script en un iframe para evitar el error de
-     "multi-login" de Google: en contexto de iframe de otro dominio, Google
-     sirve la versión pública anónima y no intenta rutear por /u/N de cuenta.
-     El backend habilita esto con setXFrameOptionsMode(ALLOWALL). -->
-<iframe id="app" allow="geolocation; camera; fullscreen"></iframe>
-<a id="fallback" target="_blank" rel="noopener">Abrir en pestaña nueva</a>
+
+<header>
+  <button id="btn-back" class="back" style="display:none;">‹</button>
+  <img class="logo" id="logo" alt="INGECO">
+  <h1 id="titulo">Demarcación Vial</h1>
+</header>
+
+<main>
+  <section id="view-login" class="view active">
+    <div class="card">
+      <div class="input-row">
+        <label for="operario-select">Operario</label>
+        <select id="operario-select"><option value="">Cargando...</option></select>
+      </div>
+      <div class="input-row" style="margin:0;">
+        <label for="pin-input">PIN</label>
+        <input id="pin-input" type="password" inputmode="numeric" placeholder="Ingresá el PIN">
+      </div>
+      <button class="btn-primary" id="btn-login">Entrar</button>
+    </div>
+  </section>
+
+  <section id="view-carga" class="view">
+    <div class="card">
+      <div class="gps-status" id="gps-status"><span class="spinner"></span>Obteniendo ubicación...</div>
+      <div class="gps-coords" id="gps-coords"></div>
+      <div class="gps-accuracy" id="gps-accuracy"></div>
+    </div>
+
+    <div class="card">
+      <div class="foto-slot">
+        <label class="tit">Foto ANTES</label>
+        <input id="file-antes" type="file" accept="image/*" capture="environment" style="display:none;">
+        <button class="btn-secondary" id="btn-foto-antes">📷 Sacar foto antes</button>
+        <img id="prev-antes" class="preview" alt="antes">
+      </div>
+      <div class="foto-slot">
+        <label class="tit">Foto DESPUÉS</label>
+        <input id="file-despues" type="file" accept="image/*" capture="environment" style="display:none;">
+        <button class="btn-secondary" id="btn-foto-despues">📷 Sacar foto después</button>
+        <img id="prev-despues" class="preview" alt="despues">
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="input-row">
+        <label for="tipo-trabajo">Tipo de trabajo</label>
+        <select id="tipo-trabajo">
+          <option>Línea longitudinal</option><option>Senda peatonal</option>
+          <option>Flecha</option><option>Cordón</option><option>Leyenda</option><option>Otro</option>
+        </select>
+      </div>
+      <div class="input-row">
+        <label for="tipo-pintura">Tipo de pintura</label>
+        <select id="tipo-pintura"><option>Termoplástica 3mm</option><option>Acrílica</option></select>
+      </div>
+      <div class="input-row">
+        <label for="color">Color</label>
+        <select id="color"><option>Blanco</option><option>Amarillo</option></select>
+      </div>
+      <div class="input-row">
+        <label for="m2">Metros cuadrados (m²)</label>
+        <input id="m2" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Ej: 12.5">
+      </div>
+      <div class="input-row" style="margin:0;">
+        <label for="obs">Observaciones (opcional)</label>
+        <textarea id="obs" rows="2" placeholder="Ej: cruce Av. Sarmiento"></textarea>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="btn-guardar">Guardar trabajo</button>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+
 <script>
-  // Monitoreo ya migró a página estática + API JSON (no sufre el ruteo /u/N de
-  // Google con multi-login). Se redirige para no romper el link ya repartido.
+  // Monitoreo vive en su propia página estática.
   if (/[?&]vista=monitoreo/.test(window.location.search)) {
     window.location.replace('demarcacion-monitoreo.html');
   }
 
-  var BASE = 'https://script.google.com/macros/s/AKfycbzSnsvUMB_WHgoMRYn8A7DhIAkf7yuhoDXV5I1zNd-pBMWkI6055uD-NM1ouzHI82hY/exec';
-  var full = BASE + window.location.search; // pasa ?vista=monitoreo si viene
-  document.getElementById('app').src = full;
-  document.getElementById('fallback').href = full;
+  // Endpoint JSON (doPost + ContentService) del proyecto "Ingeco - Demarcacion Vial".
+  // NO usar el /exec de HtmlService: con varias cuentas Google logueadas, Google
+  // reescribe la URL a /macros/u/N/... y devuelve "unable to open the file".
+  // ContentService no pasa por ese ruteo. Mismo patrón que INGECOV y PAVIMAX.
+  const ENDPOINT = 'https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec';
+
+  const $ = id => document.getElementById(id);
+  const estado = { pin:null, lat:null, lon:null, accuracy:null, fotos:{ antes:null, despues:null } };
+
+  // text/plain a propósito: Apps Script no responde preflight CORS.
+  async function api(accion, extra) {
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ accion: accion }, extra || {}))
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || 'Error del servidor');
+    return j.data;
+  }
+
+  function toast(msg, ms) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms || 2500);
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  api('config').then(c => {
+    $('titulo').textContent = 'Demarcación Vial — ' + c.obra;
+    document.title = 'Ingeco - Demarcación Vial - ' + c.obra;
+    if (c.logo) $('logo').src = c.logo;
+  }).catch(() => {});
+
+  api('listarOperarios').then(list => {
+    $('operario-select').innerHTML = '<option value="">Elegí tu nombre</option>' + list.map(n => '<option>' + esc(n) + '</option>').join('');
+  }).catch(() => { $('operario-select').innerHTML = '<option value="">(error al cargar)</option>'; });
+
+  async function login() {
+    const pin = $('pin-input').value.trim();
+    if (!pin) { toast('Ingresá el PIN'); return; }
+    if (!$('operario-select').value) { toast('Elegí tu nombre'); return; }
+    const btn = $('btn-login');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner white"></span>Entrando...';
+    try {
+      await api('validarPin', { pin: pin, rol: 'operario' });
+      estado.pin = pin;
+      mostrar('carga');
+      iniciarGps();
+    } catch (err) {
+      toast(err.message || 'PIN incorrecto', 3500);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Entrar';
+    }
+  }
+
+  function mostrar(vista) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    $('view-' + vista).classList.add('active');
+    $('btn-back').style.display = (vista === 'carga') ? 'block' : 'none';
+  }
+  function volver() { detenerGps(); mostrar('login'); }
+
+  // ─── GPS ───────────────────────────────────────────────
+  let watchId = null;
+  function iniciarGps() {
+    if (!navigator.geolocation) { $('gps-status').innerHTML = '❌ Sin GPS'; return; }
+    $('gps-status').innerHTML = '<span class="spinner"></span>Obteniendo ubicación...';
+    detenerGps();
+    watchId = navigator.geolocation.watchPosition(
+      pos => {
+        estado.lat = pos.coords.latitude; estado.lon = pos.coords.longitude; estado.accuracy = pos.coords.accuracy;
+        $('gps-status').innerHTML = '✓ Ubicación lista';
+        $('gps-coords').textContent = estado.lat.toFixed(6) + ', ' + estado.lon.toFixed(6);
+        $('gps-accuracy').textContent = 'Precisión: ±' + Math.round(estado.accuracy) + ' m';
+      },
+      err => { const m={1:'Permiso denegado',2:'GPS no disponible',3:'Tiempo agotado'}; $('gps-status').innerHTML = '❌ ' + (m[err.code]||err.message); },
+      { enableHighAccuracy:true, maximumAge:0, timeout:25000 }
+    );
+  }
+  function detenerGps() { if (watchId!==null) { navigator.geolocation.clearWatch(watchId); watchId=null; } }
+
+  // ─── Fotos ─────────────────────────────────────────────
+  function onFoto(e, cual) {
+    const f = e.target.files[0]; if (!f) return;
+    const reader = new FileReader();
+    reader.onload = ev => comprimir(ev.target.result).then(d => {
+      estado.fotos[cual] = d;
+      const p = $('prev-' + cual); p.src = d; p.classList.add('show');
+    }).catch(() => toast('No se pudo procesar la foto'));
+    reader.readAsDataURL(f);
+  }
+  function comprimir(dataUrl, maxDim, q) {
+    maxDim = maxDim || 1600; q = q || 0.82;
+    return new Promise((res, rej) => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.round(img.width*scale), h = Math.round(img.height*scale);
+        const c = document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        res(c.toDataURL('image/jpeg', q));
+      };
+      img.onerror = rej; img.src = dataUrl;
+    });
+  }
+
+  async function guardar() {
+    if (!estado.fotos.antes || !estado.fotos.despues) { toast('Faltan las fotos antes y después'); return; }
+    if (estado.lat == null) { toast('Esperá la ubicación GPS'); return; }
+    const m2 = parseFloat($('m2').value);
+    if (!(m2 > 0)) { toast('Cargá los m² (mayor a 0)'); return; }
+    const btn = $('btn-guardar'); btn.disabled = true; btn.innerHTML = '<span class="spinner white"></span>Guardando...';
+    try {
+      await api('guardarTrabajo', { payload: {
+        pin: estado.pin, operario: $('operario-select').value,
+        tipoTrabajo: $('tipo-trabajo').value, tipoPintura: $('tipo-pintura').value, color: $('color').value,
+        m2: m2, lat: estado.lat, lon: estado.lon, accuracy: estado.accuracy,
+        obs: $('obs').value.trim(), fotoAntes: estado.fotos.antes, fotoDespues: estado.fotos.despues
+      }});
+      toast('✓ Trabajo guardado');
+      estado.fotos = { antes:null, despues:null };
+      ['prev-antes','prev-despues'].forEach(id => { $(id).classList.remove('show'); $(id).src=''; });
+      $('m2').value=''; $('obs').value=''; $('file-antes').value=''; $('file-despues').value='';
+    } catch (err) {
+      toast('Error: ' + (err.message || err), 4000);
+    } finally { btn.disabled = false; btn.textContent = 'Guardar trabajo'; }
+  }
+
+  $('btn-login').addEventListener('click', login);
+  $('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  $('btn-back').addEventListener('click', volver);
+  $('btn-guardar').addEventListener('click', guardar);
+  $('btn-foto-antes').addEventListener('click', () => $('file-antes').click());
+  $('btn-foto-despues').addEventListener('click', () => $('file-despues').click());
+  $('file-antes').addEventListener('change', e => onFoto(e, 'antes'));
+  $('file-despues').addEventListener('change', e => onFoto(e, 'despues'));
 </script>
 </body>
 </html>
