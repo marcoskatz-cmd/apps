@@ -1,5 +1,5 @@
 /* Apps INGECO — hub launcher PWA */
-const CACHE = 'apps-ingeco-v8';
+const CACHE = 'apps-ingeco-v9';
 const ASSETS = [
   './',
   './index.html',

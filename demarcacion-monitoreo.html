@@ -56,8 +56,10 @@
   <section id="view-login" class="view active">
     <div class="card">
       <div class="input-row" style="margin:0;">
-        <label for="pin-input">PIN</label>
-        <input id="pin-input" type="password" inputmode="numeric" placeholder="Ingresá el PIN">
+        <label for="pin-input">Contraseña</label>
+        <!-- Sin inputmode="numeric": la clave de monitoreo es alfanumérica y en
+             el celular se abría solo el teclado numérico. -->
+        <input id="pin-input" type="password" autocomplete="current-password" placeholder="Ingresá la contraseña">
       </div>
       <button class="btn-primary" id="btn-login">Entrar</button>
     </div>
@@ -77,7 +79,6 @@
         <div class="input-row" style="margin:0;"><label>Hasta</label><input id="f-hasta" type="date"></div>
         <div class="input-row" style="margin:0;"><label>Pintura</label><select id="f-pintura"><option value="">Todas</option><option>Termoplástica 3mm</option><option>Acrílica</option></select></div>
         <div class="input-row" style="margin:0;"><label>Color</label><select id="f-color"><option value="">Todos</option><option>Blanco</option><option>Amarillo</option></select></div>
-        <div class="input-row" style="margin:0;"><label>Operario</label><select id="f-operario"><option value="">Todos</option></select></div>
         <div class="input-row" style="margin:0;"><label>Calle</label><input id="f-calle" type="text" placeholder="Buscar..."></div>
       </div>
     </div>
@@ -149,10 +150,7 @@
     $('lista').innerHTML = '<p class="empty"><span class="spinner"></span>Cargando...</p>';
     try {
       estado.trabajos = await api('listarTrabajos', { pin: estado.pin });
-      const ops = new Set();
-      estado.trabajos.forEach(t => t.operario && ops.add(t.operario));
-      $('f-operario').innerHTML = '<option value="">Todos</option>' + [...ops].map(o => '<option>' + esc(o) + '</option>').join('');
-      ['f-desde','f-hasta','f-pintura','f-color','f-operario','f-calle'].forEach(id => $(id).oninput = render);
+      ['f-desde','f-hasta','f-pintura','f-color','f-calle'].forEach(id => $(id).oninput = render);
       initMapa();
       render();
     } catch (err) {
@@ -170,7 +168,7 @@
   function filtrar() {
     const desde = $('f-desde').value ? new Date($('f-desde').value + 'T00:00:00') : null;
     const hasta = $('f-hasta').value ? new Date($('f-hasta').value + 'T23:59:59') : null;
-    const fp = $('f-pintura').value, fc = $('f-color').value, fo = $('f-operario').value;
+    const fp = $('f-pintura').value, fc = $('f-color').value;
     const fcalle = $('f-calle').value.trim().toLowerCase();
     return estado.trabajos.filter(t => {
       const d = t.fecha ? new Date(t.fecha) : null;
@@ -178,7 +176,6 @@
       if (hasta && (!d || d > hasta)) return false;
       if (fp && t.tipoPintura !== fp) return false;
       if (fc && t.color !== fc) return false;
-      if (fo && t.operario !== fo) return false;
       if (fcalle && String(t.calle).toLowerCase().indexOf(fcalle) < 0) return false;
       return true;
     });
@@ -214,9 +211,8 @@
       + '<td>' + t.m2 + '</td>'
       + '<td>' + (t.fotoAntes ? '<img class="thumb" data-full="' + esc(t.fotoAntes) + '" src="' + driveThumb(t.fotoAntes) + '" onerror="this.style.display=\'none\'">' : '') + '</td>'
       + '<td>' + (t.fotoDespues ? '<img class="thumb" data-full="' + esc(t.fotoDespues) + '" src="' + driveThumb(t.fotoDespues) + '" onerror="this.style.display=\'none\'">' : '') + '</td>'
-      + '<td>' + esc(t.operario) + '</td>'
       + '</tr>').join('');
-    $('lista').innerHTML = '<div class="tabla-wrap"><table><thead><tr><th>Fecha</th><th>Calle</th><th>Trabajo</th><th>Pintura</th><th>m²</th><th>Antes</th><th>Después</th><th>Operario</th></tr></thead><tbody>' + trs + '</tbody></table></div>';
+    $('lista').innerHTML = '<div class="tabla-wrap"><table><thead><tr><th>Fecha</th><th>Calle</th><th>Trabajo</th><th>Pintura</th><th>m²</th><th>Antes</th><th>Después</th></tr></thead><tbody>' + trs + '</tbody></table></div>';
   }
 
   function driveId(url) { const m = String(url).match(/[-\w]{25,}/); return m ? m[0] : ''; }
@@ -225,9 +221,9 @@
   function descargarCsv() {
     const rows = filtrar();
     if (!rows.length) { toast('No hay datos para exportar'); return; }
-    const cols = ['Fecha','Operario','Tipo trabajo','Tipo pintura','Color','m2','Latitud','Longitud','Calle','Foto Antes','Foto Después','Observaciones'];
+    const cols = ['Fecha','Tipo trabajo','Tipo pintura','Color','m2','Latitud','Longitud','Calle','Foto Antes','Foto Después','Observaciones'];
     const q = v => '"' + String(v==null?'':v).replace(/"/g,'""') + '"';
-    const lines = [cols.join(',')].concat(rows.map(t => [t.fecha,t.operario,t.tipoTrabajo,t.tipoPintura,t.color,t.m2,t.lat,t.lon,t.calle,t.fotoAntes,t.fotoDespues,t.obs].map(q).join(',')));
+    const lines = [cols.join(',')].concat(rows.map(t => [t.fecha,t.tipoTrabajo,t.tipoPintura,t.color,t.m2,t.lat,t.lon,t.calle,t.fotoAntes,t.fotoDespues,t.obs].map(q).join(',')));
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type:'text/csv;charset=utf-8' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'demarcacion.csv';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
