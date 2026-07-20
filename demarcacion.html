@@ -23,6 +23,12 @@
 <iframe id="app" allow="geolocation; camera; fullscreen"></iframe>
 <a id="fallback" target="_blank" rel="noopener">Abrir en pestaña nueva</a>
 <script>
+  // Monitoreo ya migró a página estática + API JSON (no sufre el ruteo /u/N de
+  // Google con multi-login). Se redirige para no romper el link ya repartido.
+  if (/[?&]vista=monitoreo/.test(window.location.search)) {
+    window.location.replace('demarcacion-monitoreo.html');
+  }
+
   var BASE = 'https://script.google.com/macros/s/AKfycbzSnsvUMB_WHgoMRYn8A7DhIAkf7yuhoDXV5I1zNd-pBMWkI6055uD-NM1ouzHI82hY/exec';
   var full = BASE + window.location.search; // pasa ?vista=monitoreo si viene
   document.getElementById('app').src = full;

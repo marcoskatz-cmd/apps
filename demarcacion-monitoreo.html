@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ingeco - Demarcación Vial (Monitoreo)</title>
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f4f5f7; color:#1f2933; -webkit-font-smoothing:antialiased; }
+  header { background:#1f3a5f; color:#fff; padding:12px 14px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:10; }
+  header img.logo { height:26px; }
+  header h1 { margin:0; font-size:16px; font-weight:600; flex:1; }
+  main { padding:16px; max-width:960px; margin:0 auto; }
+  .view { display:none; } .view.active { display:block; }
+  .card { background:#fff; border-radius:12px; padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .btn-primary { width:100%; padding:16px; border-radius:12px; border:0; background:#e85d2c; color:#fff; font-size:17px; font-weight:600; cursor:pointer; margin-top:12px; }
+  .btn-primary:disabled { background:#c0c0c0; cursor:not-allowed; }
+  .btn-primary:active:not(:disabled) { background:#c54c1f; }
+  .btn-secondary { width:100%; padding:14px; border-radius:12px; border:1px solid #cdd5df; background:#fff; color:#1f2933; font-size:15px; cursor:pointer; margin-top:8px; }
+  .input-row { margin-bottom:14px; }
+  .input-row label { display:block; font-size:13px; color:#4a5568; margin-bottom:4px; }
+  .input-row input, .input-row select { width:100%; padding:12px; border-radius:10px; border:1px solid #cdd5df; font-size:16px; -webkit-appearance:none; background:#fff; font-family:inherit; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1f2933; color:#fff; padding:12px 20px; border-radius:24px; font-size:14px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:2000; max-width:90%; text-align:center; }
+  .toast.show { opacity:1; }
+  .spinner { display:inline-block; width:14px; height:14px; border:2px solid #cdd5df; border-top-color:#1f3a5f; border-radius:50%; animation:sp .8s linear infinite; margin-right:8px; }
+  .spinner.white { border-color:rgba(255,255,255,.4); border-top-color:#fff; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:12px; }
+  .kpi { background:#fff; border-radius:12px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .kpi b { display:block; font-size:20px; color:#1f3a5f; } .kpi span { font-size:12px; color:#4a5568; }
+  .filtros { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }
+  #mapa { height:320px; border-radius:12px; margin-bottom:12px; z-index:1; }
+  .tabla-wrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  th,td { padding:8px 10px; text-align:left; font-size:13px; border-bottom:1px solid #edf2f7; vertical-align:top; white-space:nowrap; }
+  th { background:#edf2f7; font-weight:600; font-size:11px; text-transform:uppercase; color:#4a5568; }
+  td a { color:#1f3a5f; text-decoration:none; font-weight:500; }
+  .thumb { width:54px; height:40px; object-fit:cover; border-radius:6px; cursor:pointer; border:1px solid #cdd5df; }
+  .count { color:#718096; font-size:13px; margin:8px 0 12px 2px; }
+  .empty { text-align:center; color:#718096; padding:40px 16px; }
+  .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:3000; align-items:center; justify-content:center; padding:20px; }
+  .modal.show { display:flex; }
+  .modal img { max-width:100%; max-height:80vh; border-radius:10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" id="logo" alt="INGECO">
+  <h1 id="titulo">Demarcación Vial</h1>
+</header>
+
+<main>
+  <section id="view-login" class="view active">
+    <div class="card">
+      <div class="input-row" style="margin:0;">
+        <label for="pin-input">PIN</label>
+        <input id="pin-input" type="password" inputmode="numeric" placeholder="Ingresá el PIN">
+      </div>
+      <button class="btn-primary" id="btn-login">Entrar</button>
+    </div>
+  </section>
+
+  <section id="view-monitoreo" class="view">
+    <div class="kpis">
+      <div class="kpi"><b id="kpi-total">0</b><span>m² totales</span></div>
+      <div class="kpi"><b id="kpi-termo">0</b><span>m² termoplástica</span></div>
+      <div class="kpi"><b id="kpi-acril">0</b><span>m² acrílica</span></div>
+      <div class="kpi"><b id="kpi-count">0</b><span>trabajos</span></div>
+    </div>
+    <div id="mapa"></div>
+    <div class="card">
+      <div class="filtros">
+        <div class="input-row" style="margin:0;"><label>Desde</label><input id="f-desde" type="date"></div>
+        <div class="input-row" style="margin:0;"><label>Hasta</label><input id="f-hasta" type="date"></div>
+        <div class="input-row" style="margin:0;"><label>Pintura</label><select id="f-pintura"><option value="">Todas</option><option>Termoplástica 3mm</option><option>Acrílica</option></select></div>
+        <div class="input-row" style="margin:0;"><label>Color</label><select id="f-color"><option value="">Todos</option><option>Blanco</option><option>Amarillo</option></select></div>
+        <div class="input-row" style="margin:0;"><label>Operario</label><select id="f-operario"><option value="">Todos</option></select></div>
+        <div class="input-row" style="margin:0;"><label>Calle</label><input id="f-calle" type="text" placeholder="Buscar..."></div>
+      </div>
+    </div>
+    <button class="btn-secondary" id="btn-csv">⬇ Descargar CSV</button>
+    <button class="btn-primary" id="btn-pdf">⬇ Descargar informe PDF</button>
+    <p class="count" id="count"></p>
+    <div id="lista"></div>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<div id="modal-img" class="modal"><img id="modal-img-el" src="" alt=""></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // Endpoint JSON (doPost + ContentService) del proyecto "Ingeco - Demarcacion Vial".
+  // NO usar el /exec de HtmlService: con varias cuentas Google logueadas, Google
+  // reescribe la URL a /macros/u/N/... y devuelve "unable to open the file".
+  // ContentService no pasa por ese ruteo. Mismo patrón que INGECOV y PAVIMAX.
+  const ENDPOINT = 'https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec';
+
+  const $ = id => document.getElementById(id);
+  const estado = { pin:null, trabajos:[], map:null, capa:null };
+
+  // text/plain a propósito: Apps Script no responde preflight CORS.
+  async function api(accion, payload) {
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(Object.assign({ accion: accion }, payload || {}))
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || 'Error del servidor');
+    return j.data;
+  }
+
+  function toast(msg, ms) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), ms || 2500);
+  }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  api('config').then(c => {
+    $('titulo').textContent = 'Demarcación Vial — ' + c.obra;
+    document.title = 'Ingeco - Demarcación Vial - ' + c.obra;
+    if (c.logo) $('logo').src = c.logo;
+  }).catch(() => {});
+
+  async function login() {
+    const pin = $('pin-input').value.trim();
+    if (!pin) { toast('Ingresá el PIN'); return; }
+    const btn = $('btn-login');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner white"></span>Entrando...';
+    try {
+      await api('validarPin', { pin: pin, rol: 'monitoreo' });
+      estado.pin = pin;
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      $('view-monitoreo').classList.add('active');
+      cargarMonitoreo();
+    } catch (err) {
+      toast(err.message || 'PIN incorrecto', 3500);
+    } finally {
+      btn.disabled = false; btn.textContent = 'Entrar';
+    }
+  }
+
+  async function cargarMonitoreo() {
+    $('lista').innerHTML = '<p class="empty"><span class="spinner"></span>Cargando...</p>';
+    try {
+      estado.trabajos = await api('listarTrabajos', { pin: estado.pin });
+      const ops = new Set();
+      estado.trabajos.forEach(t => t.operario && ops.add(t.operario));
+      $('f-operario').innerHTML = '<option value="">Todos</option>' + [...ops].map(o => '<option>' + esc(o) + '</option>').join('');
+      ['f-desde','f-hasta','f-pintura','f-color','f-operario','f-calle'].forEach(id => $(id).oninput = render);
+      initMapa();
+      render();
+    } catch (err) {
+      $('lista').innerHTML = '<p class="empty">Error: ' + esc(err.message || err) + '</p>';
+    }
+  }
+
+  function initMapa() {
+    if (estado.map) return;
+    estado.map = L.map('mapa').setView([-26.83, -65.22], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(estado.map);
+    estado.capa = L.layerGroup().addTo(estado.map);
+  }
+
+  function filtrar() {
+    const desde = $('f-desde').value ? new Date($('f-desde').value + 'T00:00:00') : null;
+    const hasta = $('f-hasta').value ? new Date($('f-hasta').value + 'T23:59:59') : null;
+    const fp = $('f-pintura').value, fc = $('f-color').value, fo = $('f-operario').value;
+    const fcalle = $('f-calle').value.trim().toLowerCase();
+    return estado.trabajos.filter(t => {
+      const d = t.fecha ? new Date(t.fecha) : null;
+      if (desde && (!d || d < desde)) return false;
+      if (hasta && (!d || d > hasta)) return false;
+      if (fp && t.tipoPintura !== fp) return false;
+      if (fc && t.color !== fc) return false;
+      if (fo && t.operario !== fo) return false;
+      if (fcalle && String(t.calle).toLowerCase().indexOf(fcalle) < 0) return false;
+      return true;
+    });
+  }
+
+  function render() {
+    const rows = filtrar();
+    let total=0, termo=0, acril=0;
+    rows.forEach(t => { total += t.m2; if (/termopl/i.test(t.tipoPintura)) termo += t.m2; else if (/acr/i.test(t.tipoPintura)) acril += t.m2; });
+    const nf = n => n.toLocaleString('es-AR');
+    $('kpi-total').textContent = nf(total); $('kpi-termo').textContent = nf(termo);
+    $('kpi-acril').textContent = nf(acril); $('kpi-count').textContent = rows.length;
+
+    if (estado.capa) {
+      estado.capa.clearLayers();
+      rows.forEach(t => {
+        if (typeof t.lat !== 'number' || typeof t.lon !== 'number') return;
+        const color = /termopl/i.test(t.tipoPintura) ? '#1f3a5f' : '#e85d2c';
+        L.circleMarker([t.lat, t.lon], { radius:7, color:color, fillColor:color, fillOpacity:.8, weight:1 })
+          .bindPopup('<b>' + esc(t.tipoTrabajo) + '</b><br>' + esc(t.calle) + '<br>' + t.m2 + ' m² · ' + esc(t.tipoPintura) + ' ' + esc(t.color))
+          .addTo(estado.capa);
+      });
+    }
+
+    $('count').textContent = rows.length + (rows.length === 1 ? ' trabajo' : ' trabajos');
+    if (!rows.length) { $('lista').innerHTML = '<p class="empty">Sin trabajos para los filtros elegidos.</p>'; return; }
+    const fmt = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); };
+    const trs = rows.map(t => '<tr>'
+      + '<td>' + fmt(t.fecha) + '</td>'
+      + '<td><a href="' + esc(t.maps) + '" target="_blank" rel="noopener">' + (t.calle ? esc(t.calle) : (t.lat + ', ' + t.lon)) + '</a></td>'
+      + '<td>' + esc(t.tipoTrabajo) + '</td>'
+      + '<td>' + esc(t.tipoPintura) + '<br>' + esc(t.color) + '</td>'
+      + '<td>' + t.m2 + '</td>'
+      + '<td>' + (t.fotoAntes ? '<img class="thumb" data-full="' + esc(t.fotoAntes) + '" src="' + driveThumb(t.fotoAntes) + '" onerror="this.style.display=\'none\'">' : '') + '</td>'
+      + '<td>' + (t.fotoDespues ? '<img class="thumb" data-full="' + esc(t.fotoDespues) + '" src="' + driveThumb(t.fotoDespues) + '" onerror="this.style.display=\'none\'">' : '') + '</td>'
+      + '<td>' + esc(t.operario) + '</td>'
+      + '</tr>').join('');
+    $('lista').innerHTML = '<div class="tabla-wrap"><table><thead><tr><th>Fecha</th><th>Calle</th><th>Trabajo</th><th>Pintura</th><th>m²</th><th>Antes</th><th>Después</th><th>Operario</th></tr></thead><tbody>' + trs + '</tbody></table></div>';
+  }
+
+  function driveId(url) { const m = String(url).match(/[-\w]{25,}/); return m ? m[0] : ''; }
+  function driveThumb(url, w) { const id = driveId(url); return id ? ('https://drive.google.com/thumbnail?id=' + id + '&sz=w' + (w||200)) : ''; }
+
+  function descargarCsv() {
+    const rows = filtrar();
+    if (!rows.length) { toast('No hay datos para exportar'); return; }
+    const cols = ['Fecha','Operario','Tipo trabajo','Tipo pintura','Color','m2','Latitud','Longitud','Calle','Foto Antes','Foto Después','Observaciones'];
+    const q = v => '"' + String(v==null?'':v).replace(/"/g,'""') + '"';
+    const lines = [cols.join(',')].concat(rows.map(t => [t.fecha,t.operario,t.tipoTrabajo,t.tipoPintura,t.color,t.m2,t.lat,t.lon,t.calle,t.fotoAntes,t.fotoDespues,t.obs].map(q).join(',')));
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type:'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'demarcacion.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    toast('✓ CSV descargado');
+  }
+
+  async function descargarPdf() {
+    try {
+      toast('Generando PDF...');
+      const res = await api('generarInformePdf', { pin: estado.pin });
+      const bin = atob(res.base64); const arr = new Uint8Array(bin.length);
+      for (let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+      const blob = new Blob([arr], { type:'application/pdf' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = res.name;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      toast('✓ PDF descargado');
+    } catch (err) { toast('Error: ' + (err.message || err), 4000); }
+  }
+
+  $('btn-login').addEventListener('click', login);
+  $('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+  $('btn-csv').addEventListener('click', descargarCsv);
+  $('btn-pdf').addEventListener('click', descargarPdf);
+  $('modal-img').addEventListener('click', () => $('modal-img').classList.remove('show'));
+  $('lista').addEventListener('click', e => {
+    const img = e.target.closest('.thumb'); if (!img) return;
+    const id = driveId(img.dataset.full);
+    $('modal-img-el').src = id ? ('https://drive.google.com/thumbnail?id=' + id + '&sz=w1200') : img.dataset.full;
+    $('modal-img').classList.add('show');
+  });
+</script>
+</body>
+</html>
