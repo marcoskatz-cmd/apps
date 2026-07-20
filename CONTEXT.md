@@ -1,0 +1,68 @@
+# Contexto del proyecto — Hub Apps INGECO
+
+> Documento de contexto para retomar el proyecto desde cualquier PC.
+> Última actualización: 2026-07-19
+
+## Qué es
+Launcher PWA que agrupa las web apps internas de INGECO en un solo ícono
+("Apps INGECO"). Evita instalar cada app como PWA separada.
+
+- **Repo**: https://github.com/marcoskatz-cmd/apps
+- **URL pública actual**: https://marcoskatz-cmd.github.io/apps/
+- **Stack**: HTML + CSS + JS vanilla, sin build. PWA (manifest.json +
+  service-worker.js + icon-192/512.png). GitHub Pages redeploya solo al pushear a `main`.
+
+## Apps incluidas (array `APPS` en index.html)
+| App | Rol | URL |
+|-----|-----|-----|
+| PAVIMAX | App operario | https://marcoskatz-cmd.github.io/pavimax/ |
+| PAVIMAX | Oficina (cargar pedidos) | https://marcoskatz-cmd.github.io/pavimax/cargar.html |
+| INGECOV | Mantenimiento de flota | https://marcoskatz-cmd.github.io/ingecov/ |
+| Demarcación Vial | Operarios / Municipio | https://marcoskatz-cmd.github.io/apps/demarcacion.html |
+| Compras | Pedidos de compra | https://pedidos-ingeco.vercel.app/ |
+
+### Sumar una app nueva
+Editar el array `APPS` en `index.html`:
+```js
+{ name, role, url, icon: '🚀', color: 'green|blue|orange|purple|cyan|amber' }
+```
+Bumpear `CACHE = 'apps-ingeco-vN'` en `service-worker.js` cuando cambie index.html.
+Luego `git add . && git commit && git push origin main`.
+
+## Demarcación Vial (app de control de obra de demarcación vial)
+- Backend: proyecto Apps Script `baches-detector` (reversionado desde la app de
+  bacheo). Carpeta local: `C:\Users\Usuario\Proyectos\baches-detector`.
+  scriptId `1YyUCjeSIY8ED2qgRLeaqlLdlLKMSo_WZ32Z8vN98XZ9rYy5DxzjeeF7_`.
+- Login por PIN: OPERARIO_PIN=1234, MONITOREO_PIN=muni2026.
+- `/exec` deployment id: `AKfycbzSnsvUMB_WHgoMRYn8A7DhIAkf7yuhoDXV5I1zNd-pBMWkI6055uD-NM1ouzHI82hY`.
+- **`demarcacion.html` es un wrapper con `<iframe>`** que embebe el `/exec`.
+  Motivo: los `/exec` de Apps Script fallan ("unable to open the file") cuando
+  el navegador tiene varias cuentas Google logueadas. Al embeber desde otro
+  origen (GitHub Pages), Google sirve la versión anónima pública y funciona.
+  Requiere `setXFrameOptionsMode(ALLOWALL)` en doGet (ya puesto) y
+  `allow="geolocation; camera; fullscreen"` en el iframe. Pasa `?vista=monitoreo`
+  al iframe vía `window.location.search`.
+- Municipio: `demarcacion.html?vista=monitoreo`.
+
+## Dominio propio (EN CURSO — pendiente de confirmar acceso a Cloudflare)
+Objetivo: sacar el `github.io` de la URL usando el dominio de INGECO.
+- Dominio institucional: **ingecosa.com.ar** — web activa en Squarespace
+  (institucional, 65 años, Pavimax, obras). **NO tocar la raíz.**
+- **El DNS real vive en Cloudflare** (nameservers `jewel`/`ezra.ns.cloudflare.com`),
+  NO en Squarespace ni en el registrador. En Squarespace figura Provider="Other"
+  (dominio solo conectado). El `www` es CNAME a `ext-cust.squarespace.com`.
+- Plan: colgar el hub en el subdominio **`apps.ingecosa.com.ar`** (subdominio para
+  no arriesgar la web institucional).
+  1. Cloudflare → DNS → Add record: `CNAME`, Name `apps`,
+     target `marcoskatz-cmd.github.io`, **Proxy = DNS only (nube gris)**.
+  2. Archivo `CNAME` con `apps.ingecosa.com.ar` en este repo.
+  3. GitHub repo `apps` → Settings → Pages → Custom domain `apps.ingecosa.com.ar`
+     → Enforce HTTPS.
+- Pendiente: Marcos debe confirmar acceso a la cuenta de Cloudflare de INGECO.
+
+## Proteger el código (aclaración)
+El backend Apps Script (.gs) YA es privado — solo lo ve el desarrollador, la
+competencia no puede leerlo. El frontend (Index.html) inevitablemente viaja al
+navegador (view-source visible), como en cualquier web. La protección real es:
+lógica en el backend + gate por PIN + datos (Sheets/Drive) privados. Todo eso ya
+está. No vale la pena obsesionarse con ocultar el HTML.
