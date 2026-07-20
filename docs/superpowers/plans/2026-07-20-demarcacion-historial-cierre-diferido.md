@@ -20,12 +20,36 @@
 
 ## Sobre los tests
 
-El proyecto no tiene framework de tests y no vale la pena montar uno para esto. La verificación es de dos tipos, y ambas son ejecutables:
+El proyecto no tiene framework de tests y no vale la pena montar uno para esto. La verificación es de dos tipos, y ambas son ejecutables **sin intervención humana**:
 
-- **Backend:** funciones `test_*()` en un archivo `Tests.js`, que se corren desde el editor de Apps Script (Ejecutar → elegir función) y escriben en `Logger`. Escriben y borran sus propias filas de prueba.
-- **Frontend:** verificación manual en el navegador, con pasos y resultado esperado explícitos.
+- **Backend:** funciones `test_*()` en `Tests.js`, disparadas por HTTP a través de una acción `correrTest` del endpoint. Escriben y borran sus propias filas de prueba.
+- **Frontend:** verificación en el navegador integrado, contra un `npx serve` local.
 
-Donde el plan diga "correr el test", significa: abrir el editor de Apps Script, seleccionar la función en el desplegable, Ejecutar, y leer el registro de ejecución.
+Donde el plan diga "correr el test", significa: `curl` contra el endpoint con la acción `correrTest` y el nombre de la función.
+
+**Cada `clasp push` tiene que ir seguido de un `clasp deploy`** o el `/exec` sigue sirviendo el código anterior y el test corre contra la versión vieja:
+
+```bash
+npx clasp push && npx clasp deploy -i AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr -d "wip"
+```
+
+Un test pasa cuando la respuesta es `{"ok":true,...}`. Falla cuando es `{"ok":false,"error":"FALLA: ..."}`. Los `Logger.log('OK ...')` que aparecen en los tests siguen sirviendo: si la función no tira, `correrTest` devuelve `OK <nombre>`.
+
+### Guarda de seguridad de `correrTest` (no negociable)
+
+El endpoint es público y el PIN de operario está hardcodeado en `demarcacion.html`, o sea que es legible por cualquiera con ver-código-fuente. Una acción de test que borra filas **no puede** ir protegida por ese PIN: sería una forma pública de vaciar la planilla.
+
+`correrTest` se guarda con un token secreto aleatorio guardado en Script Properties bajo `TEST_TOKEN`, que **nunca** aparece en un archivo del frontend ni se commitea. Reglas:
+
+- Solo se pueden invocar funciones cuyo nombre empiece con `test_`. Nunca un nombre arbitrario.
+- Comparación del token con `Utilities.computeHmacSha256Signature` o, como mínimo, longitud fija y comparación exacta.
+- Si `TEST_TOKEN` no está seteado, la acción tira error y no ejecuta nada.
+- **El Task 10 borra `Tests.js`, la acción `correrTest` y la property `TEST_TOKEN`.** El endpoint no queda en producción con una puerta de test abierta.
+
+### Contexto de ejecución (decidido con Marcos, 2026-07-20)
+
+- Se trabaja **directo en `main`**. Cada push a `main` publica en GitHub Pages al instante, así que los commits de frontend salen al aire a medida que se hacen. El backend solo cambia de cara al usuario cuando se corre `clasp deploy`.
+- Los tests corren **contra la planilla de producción**. Todo test debe limpiar lo que escribe; usar siempre `TEST_AUTOMATICO` como operario para que las filas de prueba sean reconocibles a ojo.
 
 ## Estructura de archivos
 
@@ -66,19 +90,101 @@ npx clasp push
 
 Esperado: `Pushed 5 files.` Si pide login: `npx clasp login`. (Gotcha conocido de clasp v3: si el login se cuelga, correrlo en background y abrir a mano la URL de localhost que imprime.)
 
-- [ ] **Step 3: Anotar el estado actual de la planilla**
+- [ ] **Step 3: Agregar la acción `correrTest` al endpoint**
 
-En el editor de Apps Script, correr esta función una vez y guardar el número que imprime — sirve para verificar la migración después:
+Es lo que permite disparar los tests por HTTP en vez de a mano desde el editor.
+Crear `TestRunner.js`:
 
 ```javascript
-function contarFilas() {
-  const sh = _sheet_('Trabajos');
-  Logger.log('Filas de datos: ' + Math.max(0, sh.getLastRow() - 1));
-  Logger.log('Columnas: ' + sh.getLastColumn());
+/**
+ * Dispara una función de test por HTTP. Existe solo durante el desarrollo:
+ * el Task 10 borra este archivo, la acción del switch y la property TEST_TOKEN.
+ *
+ * Va guardado por TEST_TOKEN y NO por el PIN de operario: el PIN está
+ * hardcodeado en demarcacion.html, o sea que es público, y estas funciones
+ * borran filas de la planilla de producción.
+ */
+function correrTest(token, nombre) {
+  const esperado = PropertiesService.getScriptProperties().getProperty('TEST_TOKEN');
+  if (!esperado) throw new Error('TEST_TOKEN no está seteado.');
+  if (String(token || '').length !== String(esperado).length) throw new Error('No autorizado.');
+  if (String(token) !== String(esperado)) throw new Error('No autorizado.');
+  // Solo funciones de test, nunca un nombre arbitrario del scope global.
+  if (!/^test_[A-Za-z0-9_]+$/.test(String(nombre || ''))) throw new Error('Nombre de test inválido.');
+  const fn = this[nombre];
+  if (typeof fn !== 'function') throw new Error('No existe el test: ' + nombre);
+  return { resultado: String(fn() || 'OK ' + nombre) };
+}
+
+/** Setea el token una vez. Se corre a mano desde el editor, sola vez. */
+function setearTestToken() {
+  const t = Utilities.getUuid().replace(/-/g, '');
+  PropertiesService.getScriptProperties().setProperty('TEST_TOKEN', t);
+  Logger.log('TEST_TOKEN = ' + t);
 }
 ```
 
-Esperado: imprime la cantidad de trabajos ya cargados y `Columnas: 14`.
+En el `switch` de `_despachar_` en `WebApp.js`, agregar:
+
+```javascript
+    case 'correrTest':
+      return correrTest(req.token, req.test);
+```
+
+- [ ] **Step 4: Setear el token y armar el script de disparo**
+
+`setearTestToken` es la **única** función que hay que correr desde el editor de Apps Script, una sola vez, en todo el plan. Pusheá y corrrela:
+
+```bash
+npx clasp push
+npx clasp deploy -i AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr -d "test runner"
+```
+
+Editor de Apps Script → `setearTestToken` → Ejecutar → copiar el token del registro.
+
+Crear `correr-test.sh` en la raíz del backend (**agregarlo a `.gitignore`**, contiene el token):
+
+```bash
+#!/usr/bin/env bash
+# Dispara un test del backend por HTTP. NO commitear: contiene el token.
+TOKEN="<pegar acá el token que imprimió setearTestToken>"
+EXEC="https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec"
+curl -s -L -X POST "$EXEC" -H 'Content-Type: text/plain' \
+  -d "{\"accion\":\"correrTest\",\"token\":\"$TOKEN\",\"test\":\"$1\"}"
+echo
+```
+
+```bash
+chmod +x correr-test.sh
+echo 'correr-test.sh' >> .gitignore
+```
+
+- [ ] **Step 5: Verificar el runner y anotar el estado de la planilla**
+
+Agregar a `TestRunner.js`:
+
+```javascript
+function test_estadoPlanilla() {
+  const sh = _sheet_('Trabajos');
+  return 'Filas de datos: ' + Math.max(0, sh.getLastRow() - 1) + ' · Columnas: ' + sh.getLastColumn();
+}
+```
+
+```bash
+npx clasp push && npx clasp deploy -i AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr -d "test estado"
+./correr-test.sh test_estadoPlanilla
+```
+
+Esperado: `{"ok":true,"data":{"resultado":"Filas de datos: N · Columnas: 14"}}`. **Anotar esa N** — sirve para verificar la migración del Task 1.
+
+Verificar además que la guarda anda:
+
+```bash
+curl -s -L -X POST "https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec" \
+  -H 'Content-Type: text/plain' -d '{"accion":"correrTest","token":"mal","test":"test_estadoPlanilla"}'
+```
+
+Esperado: `{"ok":false,"error":"No autorizado."}`
 
 ---
 
@@ -149,16 +255,36 @@ function migrarIds() {
 
 - [ ] **Step 3: Pushear y correr la migración**
 
-```bash
-npx clasp push
+Agregar al final de `Migracion.js` el wrapper que permite dispararla por HTTP:
+
+```javascript
+/** Wrapper para correrTest. Devuelve el resumen en vez de solo loguearlo. */
+function test_migrarIds() {
+  return migrarIds();
+}
 ```
 
-En el editor de Apps Script: seleccionar `migrarIds` → Ejecutar.
-Esperado: `Migración lista. Filas: N. IDs nuevos: N.` — con la N del Task 0 Step 3.
+Y cambiar el final de `migrarIds()` para que **devuelva** el resumen además de loguearlo:
+
+```javascript
+  const resumen = 'Migración lista. Filas: ' + n + '. IDs nuevos: ' + tocadas + '.';
+  Logger.log(resumen);
+  return resumen;
+}
+```
+
+(El `return` temprano del caso "sin filas" también pasa a `return 'Sin filas de datos. Solo se escribieron encabezados.';`.)
+
+```bash
+npx clasp push && npx clasp deploy -i AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr -d "migracion"
+```
+
+Correr: `./correr-test.sh test_migrarIds`
+Esperado: `"Migración lista. Filas: N. IDs nuevos: N."` — con la N anotada en el Task 0 Step 5.
 
 - [ ] **Step 4: Verificar la idempotencia**
 
-Ejecutar `migrarIds` **una segunda vez**.
+Correr `./correr-test.sh test_migrarIds` **una segunda vez**.
 Esperado: `IDs nuevos: 0`. Abrir la planilla: ninguna columna se duplicó y los IDs son los mismos.
 
 - [ ] **Step 5: Commit**
@@ -238,7 +364,7 @@ function test_guardarSinFotoDespues() {
 npx clasp push
 ```
 
-Editor → `test_guardarSinFotoDespues` → Ejecutar.
+Correr: `./correr-test.sh test_guardarSinFotoDespues`
 Esperado: falla con `Faltan la foto antes y/o después.` — es la validación vieja, que es justo la que hay que sacar.
 
 - [ ] **Step 3: Modificar `guardarTrabajo`**
@@ -320,7 +446,7 @@ function _subirFoto_(dataUrl, operario, sufijo) {
 npx clasp push
 ```
 
-Editor → `test_guardarSinFotoDespues` → Ejecutar.
+Correr: `./correr-test.sh test_guardarSinFotoDespues`
 Esperado: `OK test_guardarSinFotoDespues`. La planilla no quedó con la fila de prueba (el test la borra).
 
 - [ ] **Step 6: Verificar que el camino viejo sigue andando**
@@ -394,7 +520,7 @@ function test_listarTrabajosOperario() {
 npx clasp push
 ```
 
-Editor → `test_listarTrabajosOperario` → Ejecutar.
+Correr: `./correr-test.sh test_listarTrabajosOperario`
 Esperado: falla con `listarTrabajosOperario is not defined`.
 
 - [ ] **Step 3: Implementar**
@@ -463,7 +589,7 @@ En el `switch` de `_despachar_`, agregar antes de `case 'listarTrabajos':`
 npx clasp push
 ```
 
-Editor → `test_listarTrabajosOperario` → Ejecutar.
+Correr: `./correr-test.sh test_listarTrabajosOperario`
 Esperado: `OK test_listarTrabajosOperario`.
 
 - [ ] **Step 6: Verificar que el Municipio no ve de más**
@@ -549,7 +675,7 @@ function test_actualizarConIdInexistente() {
 npx clasp push
 ```
 
-Editor → `test_actualizarSubeFotoDespues` → Ejecutar.
+Correr: `./correr-test.sh test_actualizarSubeFotoDespues`
 Esperado: falla con `actualizarTrabajo is not defined`.
 
 - [ ] **Step 3: Implementar**
@@ -623,8 +749,8 @@ En el `switch`, agregar después de `case 'guardarTrabajo':`
 npx clasp push
 ```
 
-Editor → `test_actualizarSubeFotoDespues` → Ejecutar. Esperado: `OK test_actualizarSubeFotoDespues`.
-Editor → `test_actualizarConIdInexistente` → Ejecutar. Esperado: `OK test_actualizarConIdInexistente`.
+Correr: `./correr-test.sh test_actualizarSubeFotoDespues` Esperado: `OK test_actualizarSubeFotoDespues`.
+Correr: `./correr-test.sh test_actualizarConIdInexistente` Esperado: `OK test_actualizarConIdInexistente`.
 
 - [ ] **Step 6: Desplegar la versión nueva del endpoint**
 
@@ -1149,7 +1275,7 @@ Nota: leer texto de un PDF así es tosco pero alcanza — el número `777` apare
 npx clasp push
 ```
 
-Editor → `test_pdfExcluyePendientes` → Ejecutar.
+Correr: `./correr-test.sh test_pdfExcluyePendientes`
 Esperado: falla con `FALLA: el PDF incluyó un trabajo pendiente`.
 
 - [ ] **Step 4: Modificar `generarInformePdf`**
@@ -1184,7 +1310,7 @@ Y agregar la línea al pie, justo antes del `'</body></html>'` de la plantilla:
 npx clasp push
 ```
 
-Editor → `test_pdfExcluyePendientes` → Ejecutar. Esperado: `OK test_pdfExcluyePendientes`.
+Correr: `./correr-test.sh test_pdfExcluyePendientes` Esperado: `OK test_pdfExcluyePendientes`.
 
 - [ ] **Step 6: Redesplegar y verificar a ojo**
 
@@ -1270,6 +1396,73 @@ Esperar ~1 minuto a que GitHub Pages redeploye. Desde un **celular** (no el escr
 4. Entrar con **otro operario** y confirmar que ve el trabajo del primero y puede cerrarlo.
 5. Monitoreo con el PIN del Municipio: las dos fotos se ven, y no hay ni rastro de operario ni de campos de edición (verificar en la consola: `estado.trabajos[0]`).
 6. Borrar de la planilla las filas de prueba que hayan quedado.
+
+---
+
+### Task 10: Cerrar la puerta de test
+
+**Files:**
+- Delete: `TestRunner.js`, `Tests.js`, `Migracion.js`, `correr-test.sh` (backend)
+- Modify: `WebApp.js` (sacar el `case 'correrTest'`)
+
+Sin este task, el endpoint queda en producción con una acción capaz de ejecutar
+funciones que borran filas. No es opcional y no se puede dejar "para después".
+
+- [ ] **Step 1: Borrar los archivos de desarrollo**
+
+```bash
+cd /c/Users/Usuario/Proyectos/demarcacion-backend
+rm TestRunner.js Tests.js Migracion.js correr-test.sh
+```
+
+`Migracion.js` se va también: ya corrió, es de un solo uso, y dejarlo permite
+re-ejecutar una escritura masiva sobre la planilla por accidente.
+
+- [ ] **Step 2: Sacar la acción del switch**
+
+En `_despachar_` de `WebApp.js`, borrar:
+
+```javascript
+    case 'correrTest':
+      return correrTest(req.token, req.test);
+```
+
+- [ ] **Step 3: Borrar la property**
+
+Editor de Apps Script → Configuración del proyecto → Propiedades del script →
+borrar `TEST_TOKEN`.
+
+- [ ] **Step 4: Pushear, desplegar y verificar que la puerta cerró**
+
+```bash
+npx clasp push && npx clasp deploy -i AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr -d "cierre de test runner"
+
+curl -s -L -X POST "https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec" \
+  -H 'Content-Type: text/plain' -d '{"accion":"correrTest","token":"x","test":"test_estadoPlanilla"}'
+```
+
+Esperado: `{"ok":false,"error":"Acción desconocida: correrTest"}`.
+
+- [ ] **Step 5: Verificar que la app real sigue andando**
+
+```bash
+curl -s -L -X POST "https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec" \
+  -H 'Content-Type: text/plain' -d '{"accion":"listarTrabajosOperario","pin":"1234","operario":"X"}'
+```
+
+Esperado: `{"ok":true,"data":[...]}`. Si esto falla, el deploy rompió algo.
+
+- [ ] **Step 6: Limpiar las filas de prueba de la planilla**
+
+Abrir la planilla, filtrar la columna OPERARIO por `TEST_AUTOMATICO` y `OTRO_OPERARIO`
+y borrar esas filas. Los tests limpian lo suyo, pero uno que falle a la mitad
+puede dejar una colgada.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add -A && git commit -m "chore: sacar el test runner del endpoint de produccion"
+```
 
 ---
 
