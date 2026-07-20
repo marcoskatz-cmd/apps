@@ -130,7 +130,7 @@
 
   async function login() {
     const pin = $('pin-input').value.trim();
-    if (!pin) { toast('Ingresá el PIN'); return; }
+    if (!pin) { toast('Ingresá la contraseña'); return; }
     const btn = $('btn-login');
     btn.disabled = true; btn.innerHTML = '<span class="spinner white"></span>Entrando...';
     try {
@@ -140,7 +140,11 @@
       $('view-monitoreo').classList.add('active');
       cargarMonitoreo();
     } catch (err) {
-      toast(err.message || 'PIN incorrecto', 3500);
+      // El backend habla de "PIN" porque el mensaje lo comparte con la vista de
+      // carga, donde sí es numérico. Acá es una contraseña alfanumérica.
+      const msg = String(err.message || '').indexOf('PIN incorrecto') === 0
+        ? 'Contraseña incorrecta' : (err.message || 'Contraseña incorrecta');
+      toast(msg, 3500);
     } finally {
       btn.disabled = false; btn.textContent = 'Entrar';
     }
