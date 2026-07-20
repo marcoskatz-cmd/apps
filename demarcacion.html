@@ -75,12 +75,6 @@
         <button class="btn-secondary" id="btn-foto-antes">📷 Sacar foto antes</button>
         <img id="prev-antes" class="preview" alt="antes">
       </div>
-      <div class="foto-slot">
-        <label class="tit">Foto DESPUÉS</label>
-        <input id="file-despues" type="file" accept="image/*" capture="environment" style="display:none;">
-        <button class="btn-secondary" id="btn-foto-despues">📷 Sacar foto después</button>
-        <img id="prev-despues" class="preview" alt="despues">
-      </div>
     </div>
 
     <div class="card">
@@ -128,7 +122,7 @@
   const ENDPOINT = 'https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec';
 
   const $ = id => document.getElementById(id);
-  const estado = { pin:null, lat:null, lon:null, accuracy:null, fotos:{ antes:null, despues:null } };
+  const estado = { pin:null, operario:null, lat:null, lon:null, accuracy:null, fotos:{ antes:null } };
 
   // text/plain a propósito: Apps Script no responde preflight CORS.
   async function api(accion, extra) {
@@ -168,6 +162,7 @@
     try {
       await api('validarPin', { pin: pin, rol: 'operario' });
       estado.pin = pin;
+      estado.operario = $('operario-select').value;
       mostrar('carga');
       iniciarGps();
     } catch (err) {
@@ -229,7 +224,7 @@
   }
 
   async function guardar() {
-    if (!estado.fotos.antes || !estado.fotos.despues) { toast('Faltan las fotos antes y después'); return; }
+    if (!estado.fotos.antes) { toast('Falta la foto del antes'); return; }
     if (estado.lat == null) { toast('Esperá la ubicación GPS'); return; }
     const m2 = parseFloat($('m2').value);
     if (!(m2 > 0)) { toast('Cargá los m² (mayor a 0)'); return; }
@@ -239,12 +234,12 @@
         pin: estado.pin, operario: $('operario-select').value,
         tipoTrabajo: $('tipo-trabajo').value, tipoPintura: $('tipo-pintura').value, color: $('color').value,
         m2: m2, lat: estado.lat, lon: estado.lon, accuracy: estado.accuracy,
-        obs: $('obs').value.trim(), fotoAntes: estado.fotos.antes, fotoDespues: estado.fotos.despues
+        obs: $('obs').value.trim(), fotoAntes: estado.fotos.antes
       }});
-      toast('✓ Trabajo guardado');
-      estado.fotos = { antes:null, despues:null };
-      ['prev-antes','prev-despues'].forEach(id => { $(id).classList.remove('show'); $(id).src=''; });
-      $('m2').value=''; $('obs').value=''; $('file-antes').value=''; $('file-despues').value='';
+      toast('✓ Guardado — falta la foto del después', 4000);
+      estado.fotos.antes = null;
+      $('prev-antes').classList.remove('show'); $('prev-antes').src = '';
+      $('m2').value=''; $('obs').value=''; $('file-antes').value='';
     } catch (err) {
       toast('Error: ' + (err.message || err), 4000);
     } finally { btn.disabled = false; btn.textContent = 'Guardar trabajo'; }
@@ -255,9 +250,7 @@
   $('btn-back').addEventListener('click', volver);
   $('btn-guardar').addEventListener('click', guardar);
   $('btn-foto-antes').addEventListener('click', () => $('file-antes').click());
-  $('btn-foto-despues').addEventListener('click', () => $('file-despues').click());
   $('file-antes').addEventListener('change', e => onFoto(e, 'antes'));
-  $('file-despues').addEventListener('change', e => onFoto(e, 'despues'));
 </script>
 </body>
 </html>
