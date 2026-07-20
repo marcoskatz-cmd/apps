@@ -31,7 +31,10 @@
   .kpi { background:#fff; border-radius:12px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
   .kpi b { display:block; font-size:20px; color:#1f3a5f; } .kpi span { font-size:12px; color:#4a5568; }
   .filtros { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }
-  #mapa { height:320px; border-radius:12px; margin-bottom:12px; z-index:1; }
+  #mapa { height:320px; border-radius:12px; margin-bottom:8px; z-index:1; }
+  .leyenda { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin:0 0 12px 2px; font-size:12px; color:#4a5568; }
+  .leyenda span { display:flex; align-items:center; gap:6px; }
+  .leyenda i { width:12px; height:12px; border-radius:50%; border:2px solid #1f3a5f; display:inline-block; }
   .tabla-wrap { overflow-x:auto; }
   table { width:100%; border-collapse:collapse; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.04); }
   th,td { padding:8px 10px; text-align:left; font-size:13px; border-bottom:1px solid #edf2f7; vertical-align:top; white-space:nowrap; }
@@ -73,6 +76,10 @@
       <div class="kpi"><b id="kpi-count">0</b><span>trabajos</span></div>
     </div>
     <div id="mapa"></div>
+    <div class="leyenda">
+      <span><i style="background:#ffffff"></i>Blanco</span>
+      <span><i style="background:#f2c200"></i>Amarillo</span>
+    </div>
     <div class="card">
       <div class="filtros">
         <div class="input-row" style="margin:0;"><label>Desde</label><input id="f-desde" type="date"></div>
@@ -102,6 +109,9 @@
 
   const $ = id => document.getElementById(id);
   const estado = { pin:null, trabajos:[], map:null, capa:null };
+
+  // Color de pintura → color del punto en el mapa.
+  const COLORES = { 'Blanco': '#ffffff', 'Amarillo': '#f2c200' };
 
   // text/plain a propósito: Apps Script no responde preflight CORS.
   async function api(accion, payload) {
@@ -197,8 +207,10 @@
       estado.capa.clearLayers();
       rows.forEach(t => {
         if (typeof t.lat !== 'number' || typeof t.lon !== 'number') return;
-        const color = /termopl/i.test(t.tipoPintura) ? '#1f3a5f' : '#e85d2c';
-        L.circleMarker([t.lat, t.lon], { radius:7, color:color, fillColor:color, fillOpacity:.8, weight:1 })
+        // Los puntos se colorean por COLOR de pintura. El blanco necesita borde
+        // oscuro o se pierde contra el mapa.
+        const fill = COLORES[t.color] || '#9aa5b1';
+        L.circleMarker([t.lat, t.lon], { radius:7, color:'#1f3a5f', fillColor:fill, fillOpacity:.95, weight:2 })
           .bindPopup('<b>' + esc(t.tipoTrabajo) + '</b><br>' + esc(t.calle) + '<br>' + t.m2 + ' m² · ' + esc(t.tipoPintura) + ' ' + esc(t.color))
           .addTo(estado.capa);
       });
