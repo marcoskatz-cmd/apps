@@ -33,7 +33,13 @@ Luego `git add . && git commit && git push origin main`.
 ## Demarcación Vial (app de control de obra de demarcación vial)
 - Backend: proyecto Apps Script `baches-detector` (reversionado desde la app de
   bacheo). scriptId `1YyUCjeSIY8ED2qgRLeaqlLdlLKMSo_WZ32Z8vN98XZ9rYy5DxzjeeF7_`.
-- Login por PIN: OPERARIO_PIN=1234, MONITOREO_PIN=muni2026.
+- Login por PIN. Los valores viven en las **Propiedades del script** del
+  proyecto Apps Script (`OPERARIO_PIN` y `MONITOREO_PIN`), y **no se escriben
+  acá**: este repo es público. Para consultarlos o cambiarlos: editor de Apps
+  Script → Configuración del proyecto → Propiedades del script.
+  > Este archivo llegó a tener los dos PINs en texto plano. Siguen en la
+  > historia de git, así que sacarlos de acá no alcanza: si alguna vez se
+  > sospecha filtración, hay que **rotarlos**, no editar el archivo.
 - **`demarcacion.html` y `demarcacion-monitoreo.html` son páginas estáticas**
   que hablan contra un endpoint JSON (`doPost` + `ContentService`) del proyecto
   Apps Script. NO se usa el `/exec` de HtmlService ni un wrapper con `<iframe>`:
