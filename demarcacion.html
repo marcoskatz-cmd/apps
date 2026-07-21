@@ -490,8 +490,11 @@
   $('btn-det-despues').addEventListener('click', () => $('file-det-despues').click());
   $('file-det-despues').addEventListener('change', e => onFoto(e, 'det-despues'));
   $('btn-det-guardar').addEventListener('click', guardarCambios);
-  ['det-tipo-trabajo','det-tipo-pintura','det-color','det-m2','det-obs']
-    .forEach(id => $(id).addEventListener('input', () => marcarCambio(CAMPO_POR_ID[id])));
+  Object.keys(CAMPO_POR_ID).forEach(id => {
+    const handler = () => marcarCambio(CAMPO_POR_ID[id]);
+    $(id).addEventListener('input', handler);
+    $(id).addEventListener('change', handler);
+  });
 </script>
 </body>
 </html>
