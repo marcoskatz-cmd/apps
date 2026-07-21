@@ -226,7 +226,9 @@
       + '<td>' + esc(t.tipoPintura) + '<br>' + esc(t.color) + '</td>'
       + '<td>' + t.m2 + '</td>'
       + '<td>' + (t.fotoAntes ? '<img class="thumb" data-full="' + esc(t.fotoAntes) + '" src="' + driveThumb(t.fotoAntes) + '" onerror="this.style.display=\'none\'">' : '') + '</td>'
-      + '<td>' + (t.fotoDespues ? '<img class="thumb" data-full="' + esc(t.fotoDespues) + '" src="' + driveThumb(t.fotoDespues) + '" onerror="this.style.display=\'none\'">' : '') + '</td>'
+      + '<td>' + (t.fotoDespues
+          ? '<img class="thumb" data-full="' + esc(t.fotoDespues) + '" src="' + driveThumb(t.fotoDespues) + '" onerror="this.style.display=\'none\'">'
+          : '<span style="font-size:11px;color:#c54c1f;">en ejecución</span>') + '</td>'
       + '</tr>').join('');
     $('lista').innerHTML = '<div class="tabla-wrap"><table><thead><tr><th>Fecha</th><th>Calle</th><th>Trabajo</th><th>Pintura</th><th>m²</th><th>Antes</th><th>Después</th></tr></thead><tbody>' + trs + '</tbody></table></div>';
   }
