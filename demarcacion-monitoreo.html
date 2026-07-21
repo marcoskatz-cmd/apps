@@ -104,10 +104,10 @@
       </ul>
 
       <h2>El mapa</h2>
-      <p>Cada punto es un trabajo, y el color del punto es el <span class="dato">color de la pintura</span>. Al tocar un punto se abren los datos del trabajo y las dos fotos; tocando una foto se ve en grande.</p>
+      <p>Cada trabajo con ubicación registrada es un punto, y el color del punto es el <span class="dato">color de la pintura</span>. Al tocar un punto se abren los datos del trabajo y sus fotos; tocando una foto se ve en grande.</p>
 
       <h2>Actualizar</h2>
-      <p>Los datos se cargan al entrar. Con el botón <span class="dato">⟳</span> del encabezado se vuelven a pedir sin recargar la página. Al lado figura la hora de la última actualización, para saber de cuándo es lo que estás viendo.</p>
+      <p>Los datos se cargan al entrar. Con el botón <span class="dato">⟳</span> del encabezado se vuelven a pedir sin recargar la página. Arriba de los totales figura la hora de la última actualización, para saber de cuándo es lo que estás viendo.</p>
     </div>
   </section>
 
@@ -213,8 +213,11 @@
     $('btn-back').style.display = (vista === 'ayuda') ? 'block' : 'none';
     $('btn-ayuda').style.display = (vista === 'monitoreo') ? 'block' : 'none';
     $('btn-refrescar').style.display = (vista === 'monitoreo') ? 'block' : 'none';
+    // Leaflet no recalcula el tamaño mientras el contenedor está oculto: al
+    // volver de la ayuda hay que avisarle o el mapa queda con tiles grises.
+    if (vista === 'monitoreo' && estado.map) setTimeout(() => estado.map.invalidateSize(), 0);
     $('titulo').textContent = (vista === 'ayuda')
-      ? 'Cómo se usa' : ('Demarcación Vial' + (estado.obra ? ' — ' + estado.obra : ''));
+      ? '¿Cómo se usa?' : ('Demarcación Vial' + (estado.obra ? ' — ' + estado.obra : ''));
     window.scrollTo(0, 0);
   }
 
@@ -222,6 +225,7 @@
     if (!esRefresco) $('lista').innerHTML = '<p class="empty"><span class="spinner"></span>Cargando...</p>';
     const btn = $('btn-refrescar');
     btn.disabled = true;
+    btn.innerHTML = '<span class="spinner white"></span>';
     try {
       estado.trabajos = await api('listarTrabajos', { pin: estado.pin });
       ['f-desde','f-hasta','f-pintura','f-color','f-calle'].forEach(id => $(id).oninput = render);
@@ -236,6 +240,7 @@
       else $('lista').innerHTML = '<p class="empty">Error: ' + esc(err.message || err) + '</p>';
     } finally {
       btn.disabled = false;
+      btn.textContent = '⟳';
     }
   }
 
@@ -312,10 +317,10 @@
     const fmt = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); };
     const trs = rows.map(t => '<tr>'
       + '<td>' + fmt(t.fecha) + '</td>'
-      + '<td><a href="' + esc(t.maps) + '" target="_blank" rel="noopener">' + (t.calle ? esc(t.calle) : (t.lat + ', ' + t.lon)) + '</a></td>'
+      + '<td><a href="' + esc(t.maps) + '" target="_blank" rel="noopener">' + (t.calle ? esc(t.calle) : esc(t.lat + ', ' + t.lon)) + '</a></td>'
       + '<td>' + esc(t.tipoTrabajo) + '</td>'
       + '<td>' + esc(t.tipoPintura) + '<br>' + esc(t.color) + '</td>'
-      + '<td>' + t.m2 + '</td>'
+      + '<td>' + esc(t.m2) + '</td>'
       + '<td>' + (t.fotoAntes ? '<img class="thumb" data-full="' + esc(t.fotoAntes) + '" src="' + driveThumb(t.fotoAntes) + '" onerror="this.style.display=\'none\'">' : '') + '</td>'
       + '<td>' + (t.fotoDespues
           ? '<img class="thumb" data-full="' + esc(t.fotoDespues) + '" src="' + driveThumb(t.fotoDespues) + '" onerror="this.style.display=\'none\'">'

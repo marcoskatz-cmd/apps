@@ -55,8 +55,11 @@
   /* Menú: objetivos grandes, para el dedo y con guantes. */
   .menu-op { display:block; width:100%; text-align:left; background:#fff; border:1px solid #cdd5df; border-radius:12px; padding:16px; margin-bottom:12px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.04); }
   .menu-op:active { background:#f4f5f7; }
-  .menu-op .t { font-size:17px; font-weight:600; color:#1f2933; }
-  .menu-op .d { font-size:13px; color:#4a5568; margin-top:4px; line-height:1.35; }
+  /* display:block es imprescindible: si el titulo y la aclaracion quedan en
+     linea, la tarjeta se lee como un parrafo corrido y se pierde justamente
+     la distincion entre "Cerrar un trabajo" y "Ver todos los trabajos". */
+  .menu-op .t { display:block; font-size:17px; font-weight:600; color:#1f2933; line-height:1.25; }
+  .menu-op .d { display:block; font-size:13px; color:#4a5568; margin-top:5px; line-height:1.35; }
   .menu-op.destacada { border-color:#e85d2c; border-left-width:4px; }
   .menu-op.ayuda .t { font-size:15px; color:#4a5568; font-weight:500; }
   /* Instructivo */
@@ -325,7 +328,9 @@
     $('view-' + vista).classList.add('active');
     $('btn-back').style.display = (vista === 'login') ? 'none' : 'block';
     let t = TITULOS[vista] || 'Demarcación Vial';
-    if (vista === 'historial' && estado.filtro === 'pendientes') t = 'Cerrar un trabajo';
+    if (vista === 'historial') {
+      t = { pendientes: 'Cerrar un trabajo', mios: 'Mis trabajos', todos: 'Todos los trabajos' }[estado.filtro] || t;
+    }
     if ((vista === 'login' || vista === 'menu') && estado.obra) t += ' — ' + estado.obra;
     $('titulo').textContent = t;
     window.scrollTo(0, 0);
