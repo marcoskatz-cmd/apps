@@ -10,7 +10,9 @@
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f4f5f7; color:#1f2933; -webkit-font-smoothing:antialiased; overscroll-behavior:none; }
   header { background:#1f3a5f; color:#fff; padding:12px 14px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:10; }
   header img.logo { height:26px; }
-  header h1 { margin:0; font-size:16px; font-weight:600; flex:1; }
+  /* Una sola linea: si el titulo se parte, el header crece y se come
+     media pantalla del celular. El nombre de la obra es secundario. */
+  header h1 { margin:0; font-size:16px; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .back { background:none; border:0; color:#fff; font-size:26px; line-height:1; padding:4px 10px; cursor:pointer; border-radius:8px; }
   .back:active { background:rgba(255,255,255,.1); }
   main { padding:16px; max-width:960px; margin:0 auto; }

@@ -1,11 +1,12 @@
 /* Apps INGECO — hub launcher PWA */
-const CACHE = 'apps-ingeco-v17';
+const CACHE = 'apps-ingeco-v18';
 const ASSETS = [
   './',
   './index.html',
   './demarcacion.html',
   './demarcacion-monitoreo.html',
   './manifest.json',
+  './ciudad-smt.png',
   './icon-192.png',
   './icon-512.png'
 ];

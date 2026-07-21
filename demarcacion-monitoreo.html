@@ -11,7 +11,12 @@
   body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f4f5f7; color:#1f2933; -webkit-font-smoothing:antialiased; }
   header { background:#1f3a5f; color:#fff; padding:12px 14px; display:flex; align-items:center; gap:10px; position:sticky; top:0; z-index:10; }
   header img.logo { height:26px; }
-  header h1 { margin:0; font-size:16px; font-weight:600; flex:1; }
+  /* El logo del Municipio es oscuro sobre fondo claro: sin el recuadro blanco
+     se pierde contra el azul de la barra. */
+  header img.logo-muni { height:30px; background:#fff; border-radius:6px; padding:3px; }
+  /* Una sola linea: si el titulo se parte, el header crece y se come
+     media pantalla del celular. El nombre de la obra es secundario. */
+  header h1 { margin:0; font-size:16px; font-weight:600; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   main { padding:16px; max-width:960px; margin:0 auto; }
   .view { display:none; } .view.active { display:block; }
   .card { background:#fff; border-radius:12px; padding:14px 16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
@@ -74,6 +79,7 @@
 <header>
   <button id="btn-back" class="hdr-btn" style="display:none;" title="Volver">‹</button>
   <img class="logo" id="logo" alt="INGECO">
+  <img class="logo-muni" src="ciudad-smt.png" alt="Municipalidad de San Miguel de Tucumán">
   <h1 id="titulo">Demarcación Vial</h1>
   <button id="btn-ayuda" class="hdr-btn hdr-texto" style="display:none;">¿Cómo se usa?</button>
 </header>
