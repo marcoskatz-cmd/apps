@@ -30,6 +30,8 @@
   .kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:12px; }
   .kpi { background:#fff; border-radius:12px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,.04); }
   .kpi b { display:block; font-size:20px; color:#1f3a5f; } .kpi span { font-size:12px; color:#4a5568; }
+  .kpi-pendiente { background:#fff4ec; border:1px dashed #c54c1f; margin-bottom:12px; }
+  .kpi-pendiente b { color:#c54c1f; } .kpi-pendiente span { color:#c54c1f; }
   .filtros { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }
   #mapa { height:320px; border-radius:12px; margin-bottom:8px; z-index:1; }
   .leyenda { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin:0 0 12px 2px; font-size:12px; color:#4a5568; }
@@ -74,6 +76,9 @@
       <div class="kpi"><b id="kpi-termo">0</b><span>m² termoplástica</span></div>
       <div class="kpi"><b id="kpi-acril">0</b><span>m² acrílica</span></div>
       <div class="kpi"><b id="kpi-count">0</b><span>trabajos</span></div>
+    </div>
+    <div class="kpi kpi-pendiente" id="kpi-pendiente-wrap" style="display:none;">
+      <b id="kpi-pend-count">0</b><span>trabajos en ejecución (<b id="kpi-pend-m2" style="display:inline;font-size:inherit;">0</b> m² sin cerrar todavía)</span>
     </div>
     <div id="mapa"></div>
     <div class="leyenda">
@@ -197,11 +202,27 @@
 
   function render() {
     const rows = filtrar();
+    const cerrados = rows.filter(t => t.fotoDespues);
+    const pendientes = rows.filter(t => !t.fotoDespues);
     let total=0, termo=0, acril=0;
-    rows.forEach(t => { total += t.m2; if (/termopl/i.test(t.tipoPintura)) termo += t.m2; else if (/acr/i.test(t.tipoPintura)) acril += t.m2; });
+    // Los KPI principales cuentan solo trabajos cerrados (con foto del después),
+    // para que coincidan con el informe PDF (que también solo cuenta cerrados).
+    cerrados.forEach(t => { total += t.m2; if (/termopl/i.test(t.tipoPintura)) termo += t.m2; else if (/acr/i.test(t.tipoPintura)) acril += t.m2; });
     const nf = n => n.toLocaleString('es-AR');
     $('kpi-total').textContent = nf(total); $('kpi-termo').textContent = nf(termo);
-    $('kpi-acril').textContent = nf(acril); $('kpi-count').textContent = rows.length;
+    $('kpi-acril').textContent = nf(acril); $('kpi-count').textContent = cerrados.length;
+
+    // KPI aparte para lo que todavía está en ejecución (sin foto del después):
+    // no suma al total facturable, pero el Municipio tiene que verlo para que el
+    // número de pantalla y el del PDF no parezcan contradecirse.
+    const m2Pendientes = pendientes.reduce((s,t) => s + t.m2, 0);
+    if (pendientes.length) {
+      $('kpi-pendiente-wrap').style.display = '';
+      $('kpi-pend-count').textContent = pendientes.length;
+      $('kpi-pend-m2').textContent = nf(m2Pendientes);
+    } else {
+      $('kpi-pendiente-wrap').style.display = 'none';
+    }
 
     if (estado.capa) {
       estado.capa.clearLayers();
