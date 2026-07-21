@@ -136,7 +136,7 @@
     <div class="card">
       <div id="det-calle" class="calle"></div>
       <div id="det-meta" class="gps-accuracy"></div>
-      <img id="det-antes" class="preview show" alt="antes">
+      <img id="det-antes" class="preview show" onerror="this.style.visibility='hidden'" alt="antes">
     </div>
 
     <div class="card">
@@ -144,7 +144,7 @@
         <label class="tit">Foto DESPUÉS</label>
         <input id="file-det-despues" type="file" accept="image/*" capture="environment" style="display:none;">
         <button class="btn-secondary" id="btn-det-despues">📷 Sacar foto después</button>
-        <img id="det-despues" class="preview" alt="despues">
+        <img id="det-despues" class="preview" onerror="this.style.visibility='hidden'" alt="despues">
       </div>
     </div>
 
@@ -193,7 +193,7 @@
   const ENDPOINT = 'https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec';
 
   const $ = id => document.getElementById(id);
-  const estado = { pin:null, operario:null, lat:null, lon:null, accuracy:null, fotos:{ antes:null }, trabajos:[], filtro:'pendientes' };
+  const estado = { pin:null, operario:null, lat:null, lon:null, accuracy:null, fotos:{ antes:null }, trabajos:[], filtro:'pendientes', detalle:null };
 
   // text/plain a propósito: Apps Script no responde preflight CORS.
   async function api(accion, extra) {
@@ -300,8 +300,21 @@
   }
 
   // ─── Detalle / edición ─────────────────────────────────
+  // Un valor que no está entre las <option> dejaría el select en blanco y el
+  // guardado pisaría la celda real con vacío. Si no existe, lo agregamos.
+  function setSelect(id, valor) {
+    const sel = $(id);
+    const v = (valor == null) ? '' : String(valor);
+    if (v !== '' && !Array.prototype.some.call(sel.options, o => o.value === v)) {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      sel.appendChild(opt);
+    }
+    sel.value = v;
+  }
+
   function abrirDetalle(id) {
-    const t = (estado.trabajos || []).filter(x => x.id === id)[0];
+    const t = (estado.trabajos || []).filter(x => String(x.id) === String(id))[0];
     if (!t) { toast('No se encontró el trabajo'); return; }
     estado.detalle = { id: id, fotoDespues: null };
 
@@ -310,18 +323,21 @@
     let meta = 'Cargado por ' + t.operario + ' · ' + fmt(t.fecha);
     if (t.editadoPor) meta += ' · editado por ' + t.editadoPor + ' el ' + fmt(t.editadoEn);
     $('det-meta').textContent = meta;
-    $('det-antes').src = driveThumb(t.fotoAntes, 800);
+    const ant = $('det-antes');
+    ant.style.visibility = ''; ant.src = driveThumb(t.fotoAntes, 800);
 
     const dsp = $('det-despues');
+    dsp.style.visibility = '';
     if (t.fotoDespues) { dsp.src = driveThumb(t.fotoDespues, 800); dsp.classList.add('show'); }
     else { dsp.src = ''; dsp.classList.remove('show'); }
     $('btn-det-despues').textContent = t.fotoDespues ? '📷 Reemplazar foto después' : '📷 Sacar foto después';
 
-    $('det-tipo-trabajo').value = t.tipoTrabajo;
-    $('det-tipo-pintura').value = t.tipoPintura;
-    $('det-color').value = t.color;
-    $('det-m2').value = t.m2;
-    $('det-obs').value = t.obs;
+    setSelect('det-tipo-trabajo', t.tipoTrabajo);
+    setSelect('det-tipo-pintura', t.tipoPintura);
+    setSelect('det-color', t.color);
+    // La planilla puede traer coma decimal, que un input[type=number] rechaza.
+    $('det-m2').value = String(t.m2 == null ? '' : t.m2).replace(',', '.');
+    $('det-obs').value = t.obs == null ? '' : t.obs;
     $('file-det-despues').value = '';
     $('btn-det-guardar').disabled = true;
 
@@ -376,16 +392,21 @@
   // ─── Fotos ─────────────────────────────────────────────
   function onFoto(e, cual) {
     const f = e.target.files[0]; if (!f) return;
+    // El detalle puede cambiar mientras se comprime: guardamos a qué trabajo
+    // pertenece la foto y descartamos el resultado si ya no es el mismo.
+    const detalleId = (cual === 'det-despues' && estado.detalle) ? estado.detalle.id : null;
+    if (cual === 'det-despues' && !estado.detalle) return;
     const reader = new FileReader();
     reader.onload = ev => comprimir(ev.target.result).then(d => {
       if (cual === 'det-despues') {
+        if (!estado.detalle || String(estado.detalle.id) !== String(detalleId)) return;
         estado.detalle.fotoDespues = d;
         marcarCambio();
       } else {
         estado.fotos[cual] = d;
       }
       const p = $('prev-' + cual) || $(cual);
-      p.src = d; p.classList.add('show');
+      p.style.visibility = ''; p.src = d; p.classList.add('show');
     }).catch(() => toast('No se pudo procesar la foto'));
     reader.readAsDataURL(f);
   }
