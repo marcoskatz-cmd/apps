@@ -18,7 +18,8 @@ Launcher PWA que agrupa las web apps internas de INGECO en un solo ícono
 | PAVIMAX | App operario | https://marcoskatz-cmd.github.io/pavimax/ |
 | PAVIMAX | Oficina (cargar pedidos) | https://marcoskatz-cmd.github.io/pavimax/cargar.html |
 | INGECOV | Mantenimiento de flota | https://marcoskatz-cmd.github.io/ingecov/ |
-| Demarcación Vial | Operarios / Municipio | https://marcoskatz-cmd.github.io/apps/demarcacion.html |
+| Demarcación Vial | Operarios | https://marcoskatz-cmd.github.io/apps/demarcacion.html |
+| Demarcación Vial | Municipio (monitoreo) | https://marcoskatz-cmd.github.io/apps/demarcacion-monitoreo.html |
 | Compras | Pedidos de compra | https://pedidos-ingeco.vercel.app/ |
 
 ### Sumar una app nueva
