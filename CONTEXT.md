@@ -31,18 +31,23 @@ Luego `git add . && git commit && git push origin main`.
 
 ## Demarcación Vial (app de control de obra de demarcación vial)
 - Backend: proyecto Apps Script `baches-detector` (reversionado desde la app de
-  bacheo). Carpeta local: `C:\Users\Usuario\Proyectos\baches-detector`.
-  scriptId `1YyUCjeSIY8ED2qgRLeaqlLdlLKMSo_WZ32Z8vN98XZ9rYy5DxzjeeF7_`.
+  bacheo). scriptId `1YyUCjeSIY8ED2qgRLeaqlLdlLKMSo_WZ32Z8vN98XZ9rYy5DxzjeeF7_`.
 - Login por PIN: OPERARIO_PIN=1234, MONITOREO_PIN=muni2026.
-- `/exec` deployment id: `AKfycbzSnsvUMB_WHgoMRYn8A7DhIAkf7yuhoDXV5I1zNd-pBMWkI6055uD-NM1ouzHI82hY`.
-- **`demarcacion.html` es un wrapper con `<iframe>`** que embebe el `/exec`.
-  Motivo: los `/exec` de Apps Script fallan ("unable to open the file") cuando
-  el navegador tiene varias cuentas Google logueadas. Al embeber desde otro
-  origen (GitHub Pages), Google sirve la versión anónima pública y funciona.
-  Requiere `setXFrameOptionsMode(ALLOWALL)` en doGet (ya puesto) y
-  `allow="geolocation; camera; fullscreen"` en el iframe. Pasa `?vista=monitoreo`
-  al iframe vía `window.location.search`.
-- Municipio: `demarcacion.html?vista=monitoreo`.
+- **`demarcacion.html` y `demarcacion-monitoreo.html` son páginas estáticas**
+  que hablan contra un endpoint JSON (`doPost` + `ContentService`) del proyecto
+  Apps Script. NO se usa el `/exec` de HtmlService ni un wrapper con `<iframe>`:
+  con varias cuentas Google logueadas, Google reescribe la URL a
+  `/macros/u/N/...` y devuelve "unable to open the file". ContentService no pasa
+  por ese ruteo. Mismo patrón que INGECOV y PAVIMAX.
+- El body de los POST va como `text/plain` a propósito: Apps Script no responde
+  el preflight CORS.
+- Municipio: `demarcacion-monitoreo.html`.
+- **Flujo de carga (desde jul-2026):** el trabajo se crea con la foto ANTES y
+  queda *pendiente*; la foto DESPUÉS se sube más tarde desde el historial del
+  operario, que también permite corregir cualquier dato. Cada fila lleva un
+  `ID` (UUID, col. O) que la identifica de forma estable. El informe PDF del
+  Municipio solo cuenta los trabajos cerrados.
+- Al tocar los HTML hay que bumpear `CACHE` en `service-worker.js`.
 
 ## Dominio propio (EN CURSO — pendiente de confirmar acceso a Cloudflare)
 Objetivo: sacar el `github.io` de la URL usando el dominio de INGECO.
