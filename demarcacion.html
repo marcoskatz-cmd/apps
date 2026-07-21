@@ -52,6 +52,20 @@
   .empty { text-align:center; color:#718096; font-size:14px; padding:30px 10px; }
   .btn-hist { background:none; border:0; color:#fff; font-size:20px; padding:4px 8px; cursor:pointer; border-radius:8px; }
   .btn-hist:active { background:rgba(255,255,255,.1); }
+  /* Menú: objetivos grandes, para el dedo y con guantes. */
+  .menu-op { display:block; width:100%; text-align:left; background:#fff; border:1px solid #cdd5df; border-radius:12px; padding:16px; margin-bottom:12px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.04); }
+  .menu-op:active { background:#f4f5f7; }
+  .menu-op .t { font-size:17px; font-weight:600; color:#1f2933; }
+  .menu-op .d { font-size:13px; color:#4a5568; margin-top:4px; line-height:1.35; }
+  .menu-op.destacada { border-color:#e85d2c; border-left-width:4px; }
+  .menu-op.ayuda .t { font-size:15px; color:#4a5568; font-weight:500; }
+  /* Instructivo */
+  .ayuda h2 { font-size:15px; color:#1f3a5f; margin:18px 0 6px; }
+  .ayuda h2:first-child { margin-top:0; }
+  .ayuda ol, .ayuda ul { margin:0; padding-left:20px; }
+  .ayuda li { font-size:14px; line-height:1.5; margin-bottom:6px; }
+  .ayuda p { font-size:14px; line-height:1.5; margin:0 0 8px; }
+  .ayuda .dato { font-weight:600; }
 </style>
 </head>
 <body>
@@ -60,7 +74,6 @@
   <button id="btn-back" class="back" style="display:none;">‹</button>
   <img class="logo" id="logo" alt="INGECO">
   <h1 id="titulo">Demarcación Vial</h1>
-  <button id="btn-hist" class="btn-hist" style="display:none;" title="Historial">🗂</button>
 </header>
 
 <main>
@@ -75,6 +88,56 @@
         <input id="pin-input" type="password" inputmode="numeric" placeholder="Ingresá el PIN">
       </div>
       <button class="btn-primary" id="btn-login">Entrar</button>
+    </div>
+  </section>
+
+  <section id="view-menu" class="view">
+    <button class="menu-op destacada" data-ir="carga">
+      <span class="t">Cargar un trabajo nuevo</span>
+      <span class="d">Datos del trabajo y foto del ANTES. El trabajo queda abierto.</span>
+    </button>
+    <button class="menu-op" data-ir="pendientes">
+      <span class="t">Cerrar un trabajo — foto del DESPUÉS</span>
+      <span class="d">Solo los trabajos que están esperando la foto del después.</span>
+    </button>
+    <button class="menu-op" data-ir="todos">
+      <span class="t">Ver todos los trabajos</span>
+      <span class="d">Los cargados hasta ahora, terminados y sin terminar.</span>
+    </button>
+    <button class="menu-op ayuda" data-ir="ayuda">
+      <span class="t">¿Cómo se usa?</span>
+      <span class="d">Guía rápida de la app.</span>
+    </button>
+  </section>
+
+  <section id="view-ayuda" class="view">
+    <div class="card ayuda">
+      <h2>Cargar un trabajo nuevo</h2>
+      <ol>
+        <li>Esperá a que arriba diga <span class="dato">✓ Ubicación lista</span>. Sin ubicación no se puede guardar.</li>
+        <li>Sacá la <span class="dato">foto del ANTES</span>.</li>
+        <li>Completá tipo de trabajo, pintura, color y los m².</li>
+        <li>Guardá. El trabajo queda abierto, esperando la foto del después.</li>
+      </ol>
+
+      <h2>Cerrar un trabajo</h2>
+      <ol>
+        <li>En el menú entrá a <span class="dato">Cerrar un trabajo</span>.</li>
+        <li>Elegí el trabajo de la lista.</li>
+        <li>Sacá la <span class="dato">foto del DESPUÉS</span> y guardá.</li>
+      </ol>
+      <p>En esa misma pantalla podés corregir cualquier dato antes de guardar.</p>
+
+      <h2>Si algo falla</h2>
+      <ul>
+        <li><span class="dato">No hay señal:</span> el guardado falla, pero la foto no se pierde. Volvé a intentar cuando tengas señal, sin cerrar la app.</li>
+        <li><span class="dato">El GPS no fija:</span> salí a cielo abierto y esperá unos segundos. No se puede guardar sin ubicación.</li>
+        <li><span class="dato">Me equivoqué en los m²:</span> buscá el trabajo en <span class="dato">Ver todos los trabajos</span>, abrilo y corregilo.</li>
+        <li><span class="dato">El trabajo lo cargó otro:</span> no importa, cualquiera del equipo puede cerrarlo.</li>
+      </ul>
+
+      <h2>Para tener en cuenta</h2>
+      <p>La ubicación que queda registrada es la del momento en que sacaste la foto del antes. Sacar la del después desde otro lado no la cambia.</p>
     </div>
   </section>
 
@@ -193,7 +256,7 @@
   const ENDPOINT = 'https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec';
 
   const $ = id => document.getElementById(id);
-  const estado = { pin:null, operario:null, lat:null, lon:null, accuracy:null, fotos:{ antes:null }, trabajos:[], filtro:'pendientes', detalle:null };
+  const estado = { pin:null, operario:null, obra:null, lat:null, lon:null, accuracy:null, fotos:{ antes:null }, trabajos:[], filtro:'pendientes', detalle:null };
 
   // text/plain a propósito: Apps Script no responde preflight CORS.
   async function api(accion, extra) {
@@ -215,6 +278,9 @@
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
   api('config').then(c => {
+    // Se guarda en estado: mostrar() reescribe el título en cada cambio de vista
+    // y la obra solo corresponde en el login y el menú.
+    estado.obra = c.obra;
     $('titulo').textContent = 'Demarcación Vial — ' + c.obra;
     document.title = 'Ingeco - Demarcación Vial - ' + c.obra;
     if (c.logo) $('logo').src = c.logo;
@@ -234,8 +300,7 @@
       await api('validarPin', { pin: pin, rol: 'operario' });
       estado.pin = pin;
       estado.operario = $('operario-select').value;
-      mostrar('carga');
-      iniciarGps();
+      mostrar('menu');
     } catch (err) {
       toast(err.message || 'PIN incorrecto', 3500);
     } finally {
@@ -243,17 +308,45 @@
     }
   }
 
+  // El título del header dice SIEMPRE dónde está parado el operario. Es lo que
+  // evita que "Cerrar un trabajo" y "Ver todos" se confundan: son la misma
+  // pantalla de lista con distinto filtro, y el título es la única señal visible.
+  const TITULOS = {
+    login:     'Demarcación Vial',
+    menu:      'Demarcación Vial',
+    carga:     'Cargar un trabajo nuevo',
+    historial: 'Todos los trabajos',
+    detalle:   'Trabajo',
+    ayuda:     '¿Cómo se usa?'
+  };
+
   function mostrar(vista) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     $('view-' + vista).classList.add('active');
     $('btn-back').style.display = (vista === 'login') ? 'none' : 'block';
-    $('btn-hist').style.display = (vista === 'carga') ? 'block' : 'none';
+    let t = TITULOS[vista] || 'Demarcación Vial';
+    if (vista === 'historial' && estado.filtro === 'pendientes') t = 'Cerrar un trabajo';
+    if ((vista === 'login' || vista === 'menu') && estado.obra) t += ' — ' + estado.obra;
+    $('titulo').textContent = t;
+    window.scrollTo(0, 0);
   }
+
   function volver() {
     const actual = document.querySelector('.view.active').id;
     if (actual === 'view-detalle') { mostrar('historial'); return; }
-    if (actual === 'view-historial') { mostrar('carga'); return; }
-    detenerGps(); mostrar('login');
+    // Carga, historial y ayuda vuelven al menú; solo desde el menú se sale al login.
+    if (actual !== 'view-menu') { detenerGps(); mostrar('menu'); return; }
+    mostrar('login');
+  }
+
+  function irA(destino) {
+    if (destino === 'carga') { mostrar('carga'); iniciarGps(); return; }
+    if (destino === 'ayuda') { mostrar('ayuda'); return; }
+    estado.filtro = (destino === 'pendientes') ? 'pendientes' : 'todos';
+    document.querySelectorAll('.chip').forEach(c =>
+      c.classList.toggle('on', c.dataset.filtro === estado.filtro));
+    mostrar('historial');
+    cargarHistorial();
   }
 
   // ─── Historial ─────────────────────────────────────────
@@ -476,11 +569,15 @@
   $('btn-guardar').addEventListener('click', guardar);
   $('btn-foto-antes').addEventListener('click', () => $('file-antes').click());
   $('file-antes').addEventListener('change', e => onFoto(e, 'antes'));
-  $('btn-hist').addEventListener('click', () => { estado.filtro = 'pendientes'; mostrar('historial'); cargarHistorial(); });
+  document.querySelectorAll('.menu-op').forEach(b =>
+    b.addEventListener('click', () => irA(b.dataset.ir)));
   document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => {
     document.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
     c.classList.add('on');
     estado.filtro = c.dataset.filtro;
+    // El título sigue al filtro: si desde "Cerrar un trabajo" se pasa a otro
+    // chip, la pantalla deja de ser la de cierre y el header lo tiene que decir.
+    mostrar('historial');
     renderHistorial();
   }));
 
