@@ -47,6 +47,16 @@
   .pf-slot { display:flex; flex-direction:column; gap:3px; }
   .pf-rot { font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:#718096; }
   .pf-pend { font-size:11px; color:#c54c1f; align-self:center; padding:12px 0; }
+  .hdr-btn { background:none; border:0; color:#fff; font-size:20px; line-height:1; padding:4px 10px; cursor:pointer; border-radius:8px; }
+  .hdr-btn:active { background:rgba(255,255,255,.1); }
+  .hdr-btn:disabled { opacity:.5; cursor:default; }
+  .actualizado { font-size:12px; color:#718096; margin-bottom:8px; }
+  .ayuda h2 { font-size:15px; color:#1f3a5f; margin:18px 0 6px; }
+  .ayuda h2:first-child { margin-top:0; }
+  .ayuda ul { margin:0; padding-left:20px; }
+  .ayuda li { font-size:14px; line-height:1.5; margin-bottom:6px; }
+  .ayuda p { font-size:14px; line-height:1.5; margin:0 0 8px; }
+  .ayuda .dato { font-weight:600; }
   .count { color:#718096; font-size:13px; margin:8px 0 12px 2px; }
   .empty { text-align:center; color:#718096; padding:40px 16px; }
   .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:3000; align-items:center; justify-content:center; padding:20px; }
@@ -57,8 +67,11 @@
 <body>
 
 <header>
+  <button id="btn-back" class="hdr-btn" style="display:none;" title="Volver">‹</button>
   <img class="logo" id="logo" alt="INGECO">
   <h1 id="titulo">Demarcación Vial</h1>
+  <button id="btn-ayuda" class="hdr-btn" style="display:none;" title="Cómo se usa">?</button>
+  <button id="btn-refrescar" class="hdr-btn" style="display:none;" title="Actualizar datos">⟳</button>
 </header>
 
 <main>
@@ -74,7 +87,32 @@
     </div>
   </section>
 
+  <section id="view-ayuda" class="view">
+    <div class="card ayuda">
+      <h2>Qué muestra esta pantalla</h2>
+      <p>Los trabajos de demarcación cargados por los operarios en la obra, con la foto del antes y la del después, la ubicación y los metros cuadrados.</p>
+
+      <h2>"En ejecución"</h2>
+      <p>Un trabajo <span class="dato">en ejecución</span> es uno que ya se empezó pero todavía no tiene la foto de terminación. Aparece en la tabla y en el mapa, pero <span class="dato">no suma a los totales</span>: los m² se cuentan recién cuando el trabajo está terminado y hay foto que lo respalda.</p>
+      <p>Por eso arriba hay dos grupos de números: los totales, que son de trabajo terminado, y el de <span class="dato">en ejecución</span>, que muestra aparte lo que está en curso.</p>
+
+      <h2>Filtros, CSV y PDF</h2>
+      <ul>
+        <li>Los <span class="dato">filtros</span> (fecha, pintura, color, calle) afectan la tabla, el mapa y los totales.</li>
+        <li>El <span class="dato">CSV</span> exporta lo que estés viendo, o sea que respeta los filtros.</li>
+        <li>El <span class="dato">informe PDF</span> es siempre el informe completo: no aplica los filtros de la pantalla y cuenta solo los trabajos terminados. Si filtrás y bajás el PDF, los números no van a coincidir con lo que ves — es esperable.</li>
+      </ul>
+
+      <h2>El mapa</h2>
+      <p>Cada punto es un trabajo, y el color del punto es el <span class="dato">color de la pintura</span>. Al tocar un punto se abren los datos del trabajo y las dos fotos; tocando una foto se ve en grande.</p>
+
+      <h2>Actualizar</h2>
+      <p>Los datos se cargan al entrar. Con el botón <span class="dato">⟳</span> del encabezado se vuelven a pedir sin recargar la página. Al lado figura la hora de la última actualización, para saber de cuándo es lo que estás viendo.</p>
+    </div>
+  </section>
+
   <section id="view-monitoreo" class="view">
+    <div class="actualizado" id="actualizado"></div>
     <div class="kpis">
       <div class="kpi"><b id="kpi-total">0</b><span>m² totales</span></div>
       <div class="kpi"><b id="kpi-termo">0</b><span>m² termoplástica</span></div>
@@ -117,7 +155,7 @@
   const ENDPOINT = 'https://script.google.com/macros/s/AKfycbwVdS-WH5_c3Uj7CnqxFPMeJSTiU_iN71l_v1keqdlljs-YGCOfoX4atqkt6Lr5blFr/exec';
 
   const $ = id => document.getElementById(id);
-  const estado = { pin:null, trabajos:[], map:null, capa:null };
+  const estado = { pin:null, obra:null, trabajos:[], map:null, capa:null, actualizado:null };
 
   // Color de pintura → color del punto en el mapa.
   const COLORES = { 'Blanco': '#ffffff', 'Amarillo': '#f2c200' };
@@ -142,6 +180,7 @@
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
   api('config').then(c => {
+    estado.obra = c.obra;
     $('titulo').textContent = 'Demarcación Vial — ' + c.obra;
     document.title = 'Ingeco - Demarcación Vial - ' + c.obra;
     if (c.logo) $('logo').src = c.logo;
@@ -155,8 +194,7 @@
     try {
       await api('validarPin', { pin: pin, rol: 'monitoreo' });
       estado.pin = pin;
-      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      $('view-monitoreo').classList.add('active');
+      mostrar('monitoreo');
       cargarMonitoreo();
     } catch (err) {
       // El backend habla de "PIN" porque el mensaje lo comparte con la vista de
@@ -169,16 +207,42 @@
     }
   }
 
-  async function cargarMonitoreo() {
-    $('lista').innerHTML = '<p class="empty"><span class="spinner"></span>Cargando...</p>';
+  function mostrar(vista) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    $('view-' + vista).classList.add('active');
+    $('btn-back').style.display = (vista === 'ayuda') ? 'block' : 'none';
+    $('btn-ayuda').style.display = (vista === 'monitoreo') ? 'block' : 'none';
+    $('btn-refrescar').style.display = (vista === 'monitoreo') ? 'block' : 'none';
+    $('titulo').textContent = (vista === 'ayuda')
+      ? 'Cómo se usa' : ('Demarcación Vial' + (estado.obra ? ' — ' + estado.obra : ''));
+    window.scrollTo(0, 0);
+  }
+
+  async function cargarMonitoreo(esRefresco) {
+    if (!esRefresco) $('lista').innerHTML = '<p class="empty"><span class="spinner"></span>Cargando...</p>';
+    const btn = $('btn-refrescar');
+    btn.disabled = true;
     try {
       estado.trabajos = await api('listarTrabajos', { pin: estado.pin });
       ['f-desde','f-hasta','f-pintura','f-color','f-calle'].forEach(id => $(id).oninput = render);
       initMapa();
-      render();
+      render();  // respeta los filtros que ya estén puestos
+      // La hora se sella recién acá: si la carga falla, queda la anterior, que
+      // sigue siendo cuándo se trajeron los datos que están en pantalla.
+      estado.actualizado = new Date();
+      pintarActualizado();
     } catch (err) {
-      $('lista').innerHTML = '<p class="empty">Error: ' + esc(err.message || err) + '</p>';
+      if (esRefresco) toast('No se pudo actualizar: ' + (err.message || err), 4000);
+      else $('lista').innerHTML = '<p class="empty">Error: ' + esc(err.message || err) + '</p>';
+    } finally {
+      btn.disabled = false;
     }
+  }
+
+  function pintarActualizado() {
+    if (!estado.actualizado) { $('actualizado').textContent = ''; return; }
+    $('actualizado').textContent = 'Última actualización: ' +
+      estado.actualizado.toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false });
   }
 
   function initMapa() {
@@ -304,6 +368,9 @@
   $('pin-input').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
   $('btn-csv').addEventListener('click', descargarCsv);
   $('btn-pdf').addEventListener('click', descargarPdf);
+  $('btn-refrescar').addEventListener('click', () => cargarMonitoreo(true));
+  $('btn-ayuda').addEventListener('click', () => mostrar('ayuda'));
+  $('btn-back').addEventListener('click', () => mostrar('monitoreo'));
   $('modal-img').addEventListener('click', () => $('modal-img').classList.remove('show'));
   // Delegado en document y no en #lista: los popups del mapa los monta Leaflet
   // fuera de la lista, así que un listener acotado a #lista no los alcanzaría.
