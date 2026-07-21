@@ -305,9 +305,18 @@
   function setSelect(id, valor) {
     const sel = $(id);
     const v = (valor == null) ? '' : String(valor);
+
+    // Limpiar cualquier opción inyectada de anteriores aperturas
+    Array.prototype.forEach.call(sel.options, o => {
+      if (o.dataset.inyectada === '1') {
+        o.remove();
+      }
+    });
+
     if (v !== '' && !Array.prototype.some.call(sel.options, o => o.value === v)) {
       const opt = document.createElement('option');
       opt.value = v; opt.textContent = v;
+      opt.dataset.inyectada = '1';
       sel.appendChild(opt);
     }
     sel.value = v;
