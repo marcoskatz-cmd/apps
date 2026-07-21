@@ -43,6 +43,10 @@
   th { background:#edf2f7; font-weight:600; font-size:11px; text-transform:uppercase; color:#4a5568; }
   td a { color:#1f3a5f; text-decoration:none; font-weight:500; }
   .thumb { width:54px; height:40px; object-fit:cover; border-radius:6px; cursor:pointer; border:1px solid #cdd5df; }
+  .pf { display:flex; gap:10px; margin-top:8px; }
+  .pf-slot { display:flex; flex-direction:column; gap:3px; }
+  .pf-rot { font-size:10px; text-transform:uppercase; letter-spacing:.03em; color:#718096; }
+  .pf-pend { font-size:11px; color:#c54c1f; align-self:center; padding:12px 0; }
   .count { color:#718096; font-size:13px; margin:8px 0 12px 2px; }
   .empty { text-align:center; color:#718096; padding:40px 16px; }
   .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:3000; align-items:center; justify-content:center; padding:20px; }
@@ -232,7 +236,9 @@
         // oscuro o se pierde contra el mapa.
         const fill = COLORES[t.color] || '#9aa5b1';
         L.circleMarker([t.lat, t.lon], { radius:7, color:'#1f3a5f', fillColor:fill, fillOpacity:.95, weight:2 })
-          .bindPopup('<b>' + esc(t.tipoTrabajo) + '</b><br>' + esc(t.calle) + '<br>' + t.m2 + ' m² · ' + esc(t.tipoPintura) + ' ' + esc(t.color))
+          .bindPopup('<b>' + esc(t.tipoTrabajo) + '</b><br>' + esc(t.calle) + '<br>'
+            + esc(t.m2) + ' m² · ' + esc(t.tipoPintura) + ' ' + esc(t.color)
+            + popupFotos(t))
           .addTo(estado.capa);
       });
     }
@@ -252,6 +258,18 @@
           : '<span style="font-size:11px;color:#c54c1f;">en ejecución</span>') + '</td>'
       + '</tr>').join('');
     $('lista').innerHTML = '<div class="tabla-wrap"><table><thead><tr><th>Fecha</th><th>Calle</th><th>Trabajo</th><th>Pintura</th><th>m²</th><th>Antes</th><th>Después</th></tr></thead><tbody>' + trs + '</tbody></table></div>';
+  }
+
+  // Fotos del popup del mapa. Mismo criterio que la tabla: sin foto del después
+  // el trabajo está en ejecución, y ahí va el texto en vez de una miniatura rota.
+  function popupFotos(t) {
+    const slot = (url, rotulo) => '<div class="pf-slot"><span class="pf-rot">' + rotulo + '</span>'
+      + (url
+          ? '<img class="thumb" data-full="' + esc(url) + '" src="' + driveThumb(url, 120) + '" onerror="this.style.display=\'none\'">'
+          : '<span class="pf-pend">en ejecución</span>')
+      + '</div>';
+    if (!t.fotoAntes && !t.fotoDespues) return '';
+    return '<div class="pf">' + slot(t.fotoAntes, 'Antes') + slot(t.fotoDespues, 'Después') + '</div>';
   }
 
   function driveId(url) { const m = String(url).match(/[-\w]{25,}/); return m ? m[0] : ''; }
@@ -287,7 +305,9 @@
   $('btn-csv').addEventListener('click', descargarCsv);
   $('btn-pdf').addEventListener('click', descargarPdf);
   $('modal-img').addEventListener('click', () => $('modal-img').classList.remove('show'));
-  $('lista').addEventListener('click', e => {
+  // Delegado en document y no en #lista: los popups del mapa los monta Leaflet
+  // fuera de la lista, así que un listener acotado a #lista no los alcanzaría.
+  document.addEventListener('click', e => {
     const img = e.target.closest('.thumb'); if (!img) return;
     const id = driveId(img.dataset.full);
     $('modal-img-el').src = id ? ('https://drive.google.com/thumbnail?id=' + id + '&sz=w1200') : img.dataset.full;
