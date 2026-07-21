@@ -325,7 +325,7 @@
   function abrirDetalle(id) {
     const t = (estado.trabajos || []).filter(x => String(x.id) === String(id))[0];
     if (!t) { toast('No se encontró el trabajo'); return; }
-    estado.detalle = { id: id, fotoDespues: null };
+    estado.detalle = { id: id, fotoDespues: null, tocados: new Set() };
 
     $('det-calle').textContent = t.calle || (t.lat + ', ' + t.lon);
     const fmt = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); };
@@ -355,19 +355,33 @@
 
   // El botón se habilita solo cuando hay un cambio real, para que nadie
   // estampe una edición (y su rastro) sin querer.
-  function marcarCambio() { $('btn-det-guardar').disabled = false; }
+  // 'campo' registra qué campo tocó el operario, para mandar al backend solo
+  // lo que realmente cambió (y no pisar con datos viejos lo que otro editó).
+  const CAMPO_POR_ID = {
+    'det-tipo-trabajo': 'tipoTrabajo', 'det-tipo-pintura': 'tipoPintura',
+    'det-color': 'color', 'det-m2': 'm2', 'det-obs': 'obs'
+  };
+  function marcarCambio(campo) {
+    $('btn-det-guardar').disabled = false;
+    if (campo && estado.detalle) estado.detalle.tocados.add(campo);
+  }
 
   async function guardarCambios() {
     const d = estado.detalle; if (!d) return;
-    const m2 = parseFloat($('det-m2').value);
-    if (!(m2 > 0)) { toast('Cargá los m² (mayor a 0)'); return; }
+    const tocados = d.tocados || new Set();
+    let m2;
+    if (tocados.has('m2')) {
+      m2 = parseFloat($('det-m2').value);
+      if (!(m2 > 0)) { toast('Cargá los m² (mayor a 0)'); return; }
+    }
     const btn = $('btn-det-guardar'); btn.disabled = true; btn.innerHTML = '<span class="spinner white"></span>Guardando...';
     try {
-      const payload = {
-        pin: estado.pin, operario: estado.operario, id: d.id,
-        tipoTrabajo: $('det-tipo-trabajo').value, tipoPintura: $('det-tipo-pintura').value,
-        color: $('det-color').value, m2: m2, obs: $('det-obs').value.trim()
-      };
+      const payload = { pin: estado.pin, operario: estado.operario, id: d.id };
+      if (tocados.has('tipoTrabajo')) payload.tipoTrabajo = $('det-tipo-trabajo').value;
+      if (tocados.has('tipoPintura')) payload.tipoPintura = $('det-tipo-pintura').value;
+      if (tocados.has('color')) payload.color = $('det-color').value;
+      if (tocados.has('m2')) payload.m2 = m2;
+      if (tocados.has('obs')) payload.obs = $('det-obs').value.trim();
       if (d.fotoDespues) payload.fotoDespues = d.fotoDespues;
       await api('actualizarTrabajo', { payload: payload });
       toast('✓ Cambios guardados');
@@ -410,7 +424,7 @@
       if (cual === 'det-despues') {
         if (!estado.detalle || String(estado.detalle.id) !== String(detalleId)) return;
         estado.detalle.fotoDespues = d;
-        marcarCambio();
+        marcarCambio('fotoDespues');
       } else {
         estado.fotos[cual] = d;
       }
@@ -477,7 +491,7 @@
   $('file-det-despues').addEventListener('change', e => onFoto(e, 'det-despues'));
   $('btn-det-guardar').addEventListener('click', guardarCambios);
   ['det-tipo-trabajo','det-tipo-pintura','det-color','det-m2','det-obs']
-    .forEach(id => $(id).addEventListener('input', marcarCambio));
+    .forEach(id => $(id).addEventListener('input', () => marcarCambio(CAMPO_POR_ID[id])));
 </script>
 </body>
 </html>
