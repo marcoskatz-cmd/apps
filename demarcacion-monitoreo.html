@@ -50,7 +50,12 @@
   .hdr-btn { background:none; border:0; color:#fff; font-size:20px; line-height:1; padding:4px 10px; cursor:pointer; border-radius:8px; }
   .hdr-btn:active { background:rgba(255,255,255,.1); }
   .hdr-btn:disabled { opacity:.5; cursor:default; }
-  .actualizado { font-size:12px; color:#718096; margin-bottom:8px; }
+  .hdr-texto { font-size:14px; font-weight:500; border:1px solid rgba(255,255,255,.45); padding:6px 12px; white-space:nowrap; }
+  .barra-refresco { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+  .btn-refrescar { background:#fff; border:1px solid #cdd5df; border-radius:10px; padding:9px 14px; font-size:14px; font-weight:500; color:#1f2933; cursor:pointer; font-family:inherit; }
+  .btn-refrescar:active:not(:disabled) { background:#edf2f7; }
+  .btn-refrescar:disabled { color:#718096; cursor:default; }
+  .actualizado { font-size:12px; color:#718096; }
   .ayuda h2 { font-size:15px; color:#1f3a5f; margin:18px 0 6px; }
   .ayuda h2:first-child { margin-top:0; }
   .ayuda ul { margin:0; padding-left:20px; }
@@ -70,8 +75,7 @@
   <button id="btn-back" class="hdr-btn" style="display:none;" title="Volver">‹</button>
   <img class="logo" id="logo" alt="INGECO">
   <h1 id="titulo">Demarcación Vial</h1>
-  <button id="btn-ayuda" class="hdr-btn" style="display:none;" title="Cómo se usa">?</button>
-  <button id="btn-refrescar" class="hdr-btn" style="display:none;" title="Actualizar datos">⟳</button>
+  <button id="btn-ayuda" class="hdr-btn hdr-texto" style="display:none;">¿Cómo se usa?</button>
 </header>
 
 <main>
@@ -107,12 +111,15 @@
       <p>Cada trabajo con ubicación registrada es un punto, y el color del punto es el <span class="dato">color de la pintura</span>. Al tocar un punto se abren los datos del trabajo y sus fotos; tocando una foto se ve en grande.</p>
 
       <h2>Actualizar</h2>
-      <p>Los datos se cargan al entrar. Con el botón <span class="dato">⟳</span> del encabezado se vuelven a pedir sin recargar la página. Arriba de los totales figura la hora de la última actualización, para saber de cuándo es lo que estás viendo.</p>
+      <p>Los datos se cargan al entrar. Con el botón <span class="dato">⟳ Actualizar trabajos realizados</span>, arriba de los totales, se vuelven a pedir sin recargar la página. Al lado queda la hora de la última actualización, para saber de cuándo es lo que estás viendo.</p>
     </div>
   </section>
 
   <section id="view-monitoreo" class="view">
-    <div class="actualizado" id="actualizado"></div>
+    <div class="barra-refresco">
+      <button id="btn-refrescar" class="btn-refrescar">⟳ Actualizar trabajos realizados</button>
+      <span class="actualizado" id="actualizado"></span>
+    </div>
     <div class="kpis">
       <div class="kpi"><b id="kpi-total">0</b><span>m² totales</span></div>
       <div class="kpi"><b id="kpi-termo">0</b><span>m² termoplástica</span></div>
@@ -212,7 +219,6 @@
     $('view-' + vista).classList.add('active');
     $('btn-back').style.display = (vista === 'ayuda') ? 'block' : 'none';
     $('btn-ayuda').style.display = (vista === 'monitoreo') ? 'block' : 'none';
-    $('btn-refrescar').style.display = (vista === 'monitoreo') ? 'block' : 'none';
     // Leaflet no recalcula el tamaño mientras el contenedor está oculto: al
     // volver de la ayuda hay que avisarle o el mapa queda con tiles grises.
     if (vista === 'monitoreo' && estado.map) setTimeout(() => estado.map.invalidateSize(), 0);
@@ -225,7 +231,7 @@
     if (!esRefresco) $('lista').innerHTML = '<p class="empty"><span class="spinner"></span>Cargando...</p>';
     const btn = $('btn-refrescar');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner white"></span>';
+    btn.innerHTML = '<span class="spinner"></span>Actualizando...';
     try {
       estado.trabajos = await api('listarTrabajos', { pin: estado.pin });
       ['f-desde','f-hasta','f-pintura','f-color','f-calle'].forEach(id => $(id).oninput = render);
@@ -240,7 +246,7 @@
       else $('lista').innerHTML = '<p class="empty">Error: ' + esc(err.message || err) + '</p>';
     } finally {
       btn.disabled = false;
-      btn.textContent = '⟳';
+      btn.textContent = '⟳ Actualizar trabajos realizados';
     }
   }
 
