@@ -45,6 +45,9 @@
     border-radius:8px;padding:7px 11px;cursor:pointer;
   }
   button:hover,select:hover{border-color:var(--n1)}
+  button[aria-pressed="true"]{
+    background:var(--n1);border-color:var(--n1);color:#fff;
+  }
   button:active{transform:translateY(1px)}
   select{padding-right:26px}
 
@@ -152,14 +155,17 @@
   @media (max-width:560px){
     /* Dos filas: titulo + sello arriba, controles abajo. Con tres filas el
        encabezado se comia el 14% de la pantalla del celular. */
-    header{gap:8px;padding:8px 10px}
+    header{gap:6px;padding:8px 9px}
     h1{font-size:15px;order:1}
     h1 span{display:none}
     .crece{display:none}
     .sello{order:2;margin-left:auto;font-size:11px}
-    #filtroZona{order:3;flex:1 1 auto;min-width:0}
-    #btnActualizar{order:4}
-    #btnAyuda{order:5}
+    /* Acotado para que los cuatro controles entren en una sola fila de 375px;
+       si crece, el boton de ayuda se cae a una tercera fila. */
+    #filtroZona{order:3;flex:0 1 auto;min-width:0;max-width:108px}
+    #btnSMT{order:4}
+    #btnActualizar{order:5}
+    #btnAyuda{order:6}
     button{padding:7px 9px}
     .soloAncho{display:none}
     .soloAngosto{display:inline}
@@ -179,6 +185,8 @@
   <h1>Baches Waze <span>· INGECO</span></h1>
   <div class="crece"></div>
   <select id="filtroZona" title="Filtrar por zona"></select>
+  <button id="btnSMT" title="Mostrar solo los baches dentro del municipio capital"
+          aria-pressed="false">Solo SMT</button>
   <button id="btnActualizar" title="Volver a leer los datos">Actualizar</button>
   <button id="btnAyuda" title="Cómo se usa">
     <span class="soloAncho">¿Cómo se usa?</span><span class="soloAngosto">Ayuda</span>
@@ -225,6 +233,9 @@
     <ul>
       <li>Muestra los mismos baches que el mapa, ordenados por cantidad de reportes.</li>
       <li>Si elegís una zona arriba, la lista se filtra junto con el mapa.</li>
+      <li><b>Solo SMT</b> deja únicamente los baches dentro del ejido del
+          municipio capital, y dibuja el límite en el mapa para que veas qué
+          quedó adentro. Se combina con el filtro de zona.</li>
       <li>Tocá cualquier fila y el mapa se centra en ese bache y abre su ficha.</li>
     </ul>
 
@@ -259,7 +270,75 @@
     attribution: '&copy; OpenStreetMap · Alertas: Waze for Cities'
   }).addTo(mapa);
 
+  /* Ejido del municipio de San Miguel de Tucuman, sacado del limite
+     administrativo de OpenStreetMap (relation 3486117) y simplificado de 766
+     a 265 vertices. Verificado: da exactamente los mismos baches adentro que
+     el poligono completo. Se filtra por geometria y no por el campo ciudad
+     de Waze, que viene vacio en varios reportes. */
+  var LIMITE_SMT = [
+    [-65.27490,-26.87476],[-65.27361,-26.87469],[-65.27261,-26.87465],[-65.27101,-26.87431],[-65.26415,-26.87548],[-65.26164,-26.87351],
+    [-65.26106,-26.87100],[-65.26073,-26.86919],[-65.25922,-26.86907],[-65.25808,-26.86928],[-65.25668,-26.86955],[-65.25529,-26.86982],
+    [-65.25399,-26.87007],[-65.25255,-26.87035],[-65.25114,-26.87061],[-65.24952,-26.87091],[-65.24767,-26.87128],[-65.24564,-26.87166],
+    [-65.24444,-26.87189],[-65.24265,-26.87223],[-65.24107,-26.87254],[-65.24002,-26.87275],[-65.23746,-26.87330],[-65.23611,-26.87355],
+    [-65.23510,-26.87376],[-65.23298,-26.87418],[-65.23141,-26.87449],[-65.23068,-26.87595],[-65.23027,-26.87743],[-65.23077,-26.88317],
+    [-65.23056,-26.88605],[-65.22475,-26.89529],[-65.22244,-26.89887],[-65.22142,-26.90001],[-65.21946,-26.90164],[-65.21828,-26.90261],
+    [-65.21726,-26.90320],[-65.21651,-26.90432],[-65.21473,-26.90599],[-65.21411,-26.90710],[-65.21455,-26.90829],[-65.21314,-26.90975],
+    [-65.21173,-26.91034],[-65.21125,-26.90857],[-65.21161,-26.90748],[-65.21143,-26.90569],[-65.21138,-26.90454],[-65.20963,-26.90294],
+    [-65.20912,-26.90133],[-65.20700,-26.89914],[-65.20660,-26.89743],[-65.20609,-26.89630],[-65.20690,-26.89509],[-65.20809,-26.89558],
+    [-65.20932,-26.89578],[-65.21047,-26.89533],[-65.21062,-26.89400],[-65.20952,-26.89248],[-65.20816,-26.89253],[-65.20686,-26.89364],
+    [-65.20585,-26.89385],[-65.20484,-26.89363],[-65.20458,-26.89256],[-65.20558,-26.89162],[-65.20546,-26.89060],[-65.20391,-26.89087],
+    [-65.20254,-26.89108],[-65.20137,-26.89043],[-65.20154,-26.88911],[-65.20152,-26.88803],[-65.20321,-26.88725],[-65.20357,-26.88585],
+    [-65.20154,-26.88495],[-65.20079,-26.88380],[-65.20115,-26.88269],[-65.20086,-26.88165],[-65.19972,-26.88168],[-65.19850,-26.88080],
+    [-65.19835,-26.87914],[-65.19893,-26.87777],[-65.19775,-26.87607],[-65.19781,-26.87486],[-65.19684,-26.87365],[-65.19472,-26.87322],
+    [-65.19334,-26.87330],[-65.19281,-26.87224],[-65.19374,-26.87120],[-65.19545,-26.87020],[-65.19605,-26.86899],[-65.19570,-26.86765],
+    [-65.19442,-26.86718],[-65.19334,-26.86654],[-65.19305,-26.86533],[-65.19190,-26.86427],[-65.19058,-26.86429],[-65.18955,-26.86405],
+    [-65.18837,-26.86362],[-65.18700,-26.86280],[-65.18591,-26.86147],[-65.18500,-26.85973],[-65.18392,-26.85783],[-65.18433,-26.85582],
+    [-65.18282,-26.85520],[-65.18085,-26.85438],[-65.18057,-26.85271],[-65.17992,-26.85160],[-65.17957,-26.84956],[-65.17971,-26.84724],
+    [-65.17930,-26.84606],[-65.17822,-26.84586],[-65.17732,-26.84481],[-65.17695,-26.84345],[-65.17630,-26.84214],[-65.17652,-26.84099],
+    [-65.17605,-26.83972],[-65.17408,-26.83817],[-65.17366,-26.83711],[-65.17204,-26.83437],[-65.17096,-26.83259],[-65.17022,-26.83149],
+    [-65.16896,-26.82972],[-65.16750,-26.82819],[-65.16726,-26.82660],[-65.16598,-26.82580],[-65.16497,-26.82502],[-65.16478,-26.82334],
+    [-65.16391,-26.82218],[-65.16268,-26.82151],[-65.16299,-26.81951],[-65.16094,-26.81821],[-65.16001,-26.81693],[-65.16052,-26.81543],
+    [-65.16025,-26.81336],[-65.16091,-26.81127],[-65.16011,-26.80954],[-65.15911,-26.80816],[-65.15869,-26.80678],[-65.15902,-26.80550],
+    [-65.15974,-26.80429],[-65.16110,-26.80261],[-65.16233,-26.80135],[-65.16256,-26.80013],[-65.16128,-26.79857],[-65.16136,-26.79721],
+    [-65.16157,-26.79597],[-65.16306,-26.79516],[-65.16413,-26.79383],[-65.16512,-26.79271],[-65.16637,-26.79118],[-65.16745,-26.79032],
+    [-65.16848,-26.78969],[-65.16994,-26.78933],[-65.17132,-26.78917],[-65.17279,-26.78935],[-65.17418,-26.78989],[-65.17755,-26.79254],
+    [-65.17877,-26.79310],[-65.17980,-26.79300],[-65.18090,-26.79239],[-65.18209,-26.79210],[-65.18328,-26.79247],[-65.18431,-26.79389],
+    [-65.18558,-26.79503],[-65.18668,-26.79543],[-65.18813,-26.79552],[-65.19527,-26.79378],[-65.19724,-26.79286],[-65.19852,-26.79229],
+    [-65.20669,-26.79169],[-65.21204,-26.79131],[-65.21340,-26.79109],[-65.21449,-26.79032],[-65.21547,-26.78866],[-65.21628,-26.78760],
+    [-65.21746,-26.78697],[-65.21893,-26.78686],[-65.22009,-26.78722],[-65.22177,-26.78842],[-65.22282,-26.78881],[-65.22388,-26.78884],
+    [-65.22629,-26.78840],[-65.23217,-26.78731],[-65.23345,-26.78664],[-65.23445,-26.78643],[-65.23917,-26.78559],[-65.24026,-26.78527],
+    [-65.24113,-26.78391],[-65.24160,-26.78508],[-65.24273,-26.78572],[-65.24941,-26.78397],[-65.25073,-26.78544],[-65.25190,-26.78672],
+    [-65.25308,-26.78802],[-65.25436,-26.78940],[-65.25572,-26.79076],[-65.25680,-26.79194],[-65.25748,-26.79377],[-65.25791,-26.79493],
+    [-65.25835,-26.79614],[-65.25876,-26.79724],[-65.25940,-26.79890],[-65.25995,-26.80054],[-65.26026,-26.80166],[-65.26060,-26.80290],
+    [-65.26092,-26.80391],[-65.26125,-26.80492],[-65.26178,-26.80649],[-65.26216,-26.80756],[-65.26302,-26.80927],[-65.26356,-26.81031],
+    [-65.26389,-26.81163],[-65.26404,-26.81296],[-65.26417,-26.81423],[-65.26430,-26.81529],[-65.26458,-26.81671],[-65.26494,-26.81820],
+    [-65.26530,-26.81972],[-65.26561,-26.82098],[-65.26605,-26.82249],[-65.26638,-26.82356],[-65.26681,-26.82490],[-65.26762,-26.82652],
+    [-65.26822,-26.82779],[-65.26879,-26.82905],[-65.26952,-26.83023],[-65.27030,-26.83134],[-65.27132,-26.83222],[-65.27076,-26.83470],
+    [-65.27052,-26.83614],[-65.27022,-26.83762],[-65.26992,-26.83934],[-65.26948,-26.84075],[-65.26878,-26.84182],[-65.26851,-26.84306],
+    [-65.26898,-26.84479],[-65.26923,-26.84588],[-65.27042,-26.84661],[-65.27157,-26.84707],[-65.27261,-26.84797],[-65.27342,-26.84906],
+    [-65.27457,-26.85008],[-65.27490,-26.85111],[-65.27445,-26.85236],[-65.27350,-26.85339],[-65.27295,-26.85448],[-65.27159,-26.85515],
+    [-65.27121,-26.85623],[-65.27065,-26.85725],[-65.27084,-26.85886],[-65.27141,-26.85995],[-65.27244,-26.86105],[-65.27218,-26.86206],
+    [-65.27187,-26.86307],[-65.27159,-26.86415],[-65.27084,-26.86527],[-65.27132,-26.86637],[-65.27145,-26.86741],[-65.27093,-26.86850],
+    [-65.27150,-26.86964],[-65.27186,-26.87077],[-65.27184,-26.87181],[-65.27283,-26.87307],[-65.27384,-26.87342],[-65.27478,-26.87455],
+    [-65.27490,-26.87476]
+  ];
+
+  /* Ray casting. Recibe lat/lon; el poligono viene en [lon,lat]. */
+  function dentroDeSMT(lat, lon){
+    var adentro = false, n = LIMITE_SMT.length, j = n - 1;
+    for (var i = 0; i < n; i++){
+      var xi = LIMITE_SMT[i][0], yi = LIMITE_SMT[i][1];
+      var xj = LIMITE_SMT[j][0], yj = LIMITE_SMT[j][1];
+      if (((yi > lat) !== (yj > lat)) &&
+          (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) adentro = !adentro;
+      j = i;
+    }
+    return adentro;
+  }
+
   var capa = L.layerGroup().addTo(mapa);
+  var contorno = null;   // se dibuja solo mientras el filtro esta activo
+  var soloSMT = false;
   var todos = [];
   var marcadores = [];       // mismo orden que las filas de la lista
   var primeraVez = true;
@@ -406,7 +485,21 @@
 
   function aplicarFiltro(){
     var z = document.getElementById('filtroZona').value;
-    dibujar(ordenar(z ? todos.filter(function(b){ return b.zona === z; }) : todos));
+    var lista = todos;
+    if (z) lista = lista.filter(function(b){ return b.zona === z; });
+    if (soloSMT) lista = lista.filter(function(b){ return dentroDeSMT(b.lat, b.lon); });
+    dibujar(ordenar(lista));
+
+    // El limite se dibuja solo cuando se esta filtrando por el: asi se ve que
+    // quedo adentro y que quedo afuera, en vez de tener que confiar.
+    if (soloSMT && !contorno){
+      contorno = L.polygon(LIMITE_SMT.map(function(pt){ return [pt[1], pt[0]]; }), {
+        color:'#0d9488', weight:2, opacity:.85, fill:false, interactive:false
+      }).addTo(mapa);
+    } else if (!soloSMT && contorno){
+      mapa.removeLayer(contorno);
+      contorno = null;
+    }
   }
 
   function avisar(msg, malo){
@@ -459,6 +552,11 @@
     .addEventListener('click', function(){ cargar(true); });
   document.getElementById('filtroZona')
     .addEventListener('change', aplicarFiltro);
+  document.getElementById('btnSMT').addEventListener('click', function(){
+    soloSMT = !soloSMT;
+    this.setAttribute('aria-pressed', soloSMT ? 'true' : 'false');
+    aplicarFiltro();
+  });
   document.getElementById('btnAyuda').addEventListener('click', function(){
     document.getElementById('ayuda').classList.add('visible');
   });
