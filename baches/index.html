@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Baches Waze · INGECO</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root{
+    --fondo:#f1f5f9; --panel:#ffffff; --borde:#cbd5e1;
+    --texto:#0f172a; --tenue:#64748b;
+    /* Escala segura para daltonismo rojo-verde: teal -> ambar -> magenta.
+       Nunca verde/rojo. Ademas el tamano del circulo y la posicion en la
+       lista codifican lo mismo, asi que la prioridad se lee aunque el color
+       no se distinga. */
+    --n1:#0d9488; --n2:#d97706; --n3:#c026d3;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:var(--fondo); color:var(--texto);
+    -webkit-text-size-adjust:100%;
+  }
+
+  header{
+    position:sticky; top:0; z-index:900;
+    background:var(--panel); border-bottom:1px solid var(--borde);
+    padding:10px 14px; padding-top:max(10px,env(safe-area-inset-top));
+    display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  }
+  h1{font-size:16px;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
+  h1 span{color:var(--tenue);font-weight:400}
+  .crece{flex:1}
+  .sello{
+    font-size:12px;color:var(--tenue);white-space:nowrap;
+    display:flex;align-items:center;gap:6px;
+  }
+  .punto{width:7px;height:7px;border-radius:50%;background:var(--n1);flex:none}
+
+  button,select{
+    font:inherit;font-size:13px;color:var(--texto);
+    background:#f8fafc;border:1px solid var(--borde);
+    border-radius:8px;padding:7px 11px;cursor:pointer;
+  }
+  button:hover,select:hover{border-color:var(--n1)}
+  button:active{transform:translateY(1px)}
+  select{padding-right:26px}
+
+  #marco{position:relative}
+  #mapa{height:58vh;min-height:300px;width:100%;background:#e2e8f0}
+
+  .leaflet-popup-content-wrapper{
+    background:var(--panel);color:var(--texto);
+    border-radius:10px;border:1px solid var(--borde);
+  }
+  .leaflet-popup-tip{background:var(--panel);border:1px solid var(--borde)}
+  .leaflet-popup-content{margin:11px 13px;line-height:1.5}
+  .pop-calle{font-weight:650;font-size:15px;margin-bottom:2px}
+  .pop-ciudad{color:var(--tenue);font-size:13px;margin-bottom:8px}
+  .pop-dato{font-size:13px}
+  .pop-dato b{font-weight:650}
+  .pop-link{
+    display:inline-block;margin-top:9px;padding:6px 10px;
+    background:var(--n1);color:#ffffff;border-radius:7px;
+    text-decoration:none;font-size:13px;font-weight:650;
+  }
+
+  #referencias{
+    position:absolute;z-index:500;left:12px;bottom:16px;
+    background:var(--panel);border:1px solid var(--borde);border-radius:10px;
+    box-shadow:0 4px 16px rgba(15,23,42,.14);
+    padding:10px 12px;font-size:12px;
+  }
+  #referencias h2{font-size:11px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--tenue);font-weight:600;margin-bottom:7px}
+  .ref{display:flex;align-items:center;gap:8px;margin-top:5px}
+  .bolita{border-radius:50%;flex:none;border:1.5px solid rgba(15,23,42,.35)}
+
+  /* ── Listado ── */
+  #panelLista{padding:16px 14px 32px;max-width:900px;margin:0 auto}
+  #tituloLista{
+    display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:4px;
+  }
+  #tituloLista h2{font-size:15px;font-weight:650}
+  #tituloLista em{font-style:normal;font-size:13px;color:var(--tenue)}
+  #pistaLista{font-size:12.5px;color:var(--tenue);margin-bottom:11px}
+
+  #lista{list-style:none;display:flex;flex-direction:column;gap:8px}
+  .item{
+    display:flex;align-items:center;gap:11px;width:100%;text-align:left;
+    background:var(--panel);border:1px solid var(--borde);border-radius:11px;
+    padding:11px 13px;min-height:56px;
+  }
+  .item:hover{border-color:var(--n1)}
+  .item.activo{border-color:var(--n1);box-shadow:0 0 0 2px rgba(13,148,136,.18)}
+  .marca{width:14px;height:14px;border-radius:50%;flex:none;
+         border:1.5px solid rgba(15,23,42,.3)}
+  .cuerpo{flex:1;min-width:0}
+  .calle{
+    display:block;font-size:14.5px;font-weight:600;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .meta{
+    display:block;font-size:12.5px;color:var(--tenue);margin-top:2px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .chip{
+    font-size:12px;font-weight:650;padding:4px 9px;border-radius:999px;
+    background:#f1f5f9;border:1px solid var(--borde);white-space:nowrap;flex:none;
+  }
+  .chip.dos{background:#fff7ed;border-color:#fdba74;color:#9a3412}
+  .chip.cuatro{background:#fdf4ff;border-color:#f0abfc;color:#86198f}
+  .irMapa{
+    flex:none;font-size:12px;padding:7px 10px;border-radius:8px;
+    border:1px solid var(--borde);background:#f8fafc;text-decoration:none;
+    color:var(--texto);font-weight:600;
+  }
+  .irMapa:hover{border-color:var(--n1)}
+  #vacio{
+    text-align:center;color:var(--tenue);font-size:14px;
+    padding:26px 10px;border:1px dashed var(--borde);border-radius:11px;
+  }
+
+  #ayuda{
+    inset:0;position:fixed;z-index:1000;background:rgba(15,23,42,.45);
+    display:none;align-items:center;justify-content:center;padding:18px;
+  }
+  #ayuda.visible{display:flex}
+  #ayuda .hoja{
+    background:var(--panel);border:1px solid var(--borde);border-radius:14px;
+    max-width:520px;width:100%;max-height:82vh;overflow:auto;padding:22px;
+  }
+  #ayuda h2{font-size:18px;margin-bottom:12px}
+  #ayuda h3{font-size:14px;margin:16px 0 5px;color:var(--n1)}
+  #ayuda p{font-size:14px;color:#334155;margin-bottom:7px}
+  #ayuda ul{margin:0 0 7px 18px;font-size:14px;color:#334155}
+  #ayuda li{margin-bottom:4px}
+
+  #aviso{
+    position:fixed;z-index:950;left:50%;top:64px;transform:translateX(-50%);
+    background:var(--panel);border:1px solid var(--borde);border-radius:9px;
+    box-shadow:0 4px 16px rgba(15,23,42,.14);
+    padding:9px 15px;font-size:13px;display:none;max-width:90vw;text-align:center;
+  }
+  #aviso.visible{display:block}
+  #aviso.malo{border-color:var(--n3);color:#86198f}
+
+  .soloAngosto{display:none}
+
+  @media (max-width:560px){
+    /* Dos filas: titulo + sello arriba, controles abajo. Con tres filas el
+       encabezado se comia el 14% de la pantalla del celular. */
+    header{gap:8px;padding:8px 10px}
+    h1{font-size:15px;order:1}
+    h1 span{display:none}
+    .crece{display:none}
+    .sello{order:2;margin-left:auto;font-size:11px}
+    #filtroZona{order:3;flex:1 1 auto;min-width:0}
+    #btnActualizar{order:4}
+    #btnAyuda{order:5}
+    button{padding:7px 9px}
+    .soloAncho{display:none}
+    .soloAngosto{display:inline}
+
+    #mapa{height:46vh;min-height:260px}
+    #referencias{left:8px;bottom:10px;padding:7px 9px;font-size:11px}
+    #panelLista{padding:14px 10px 30px}
+    /* En el celular el link a Maps se toca desde la ficha del mapa: aca solo
+       estorbaba y comia el ancho del nombre de la calle. */
+    .irMapa{display:none}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Baches Waze <span>· INGECO</span></h1>
+  <div class="crece"></div>
+  <select id="filtroZona" title="Filtrar por zona"></select>
+  <button id="btnActualizar" title="Volver a leer los datos">Actualizar</button>
+  <button id="btnAyuda" title="Cómo se usa">
+    <span class="soloAncho">¿Cómo se usa?</span><span class="soloAngosto">Ayuda</span>
+  </button>
+  <div class="sello"><span class="punto"></span><span id="sello">cargando…</span></div>
+</header>
+
+<div id="marco">
+  <div id="mapa"></div>
+  <div id="referencias">
+    <h2>Reportes de Waze</h2>
+    <div class="ref"><span class="bolita" style="width:9px;height:9px;background:var(--n1)"></span> 1 reporte</div>
+    <div class="ref"><span class="bolita" style="width:14px;height:14px;background:var(--n2)"></span> 2 a 3</div>
+    <div class="ref"><span class="bolita" style="width:20px;height:20px;background:var(--n3)"></span> 4 o más</div>
+  </div>
+</div>
+
+<div id="aviso"></div>
+
+<section id="panelLista">
+  <div id="tituloLista">
+    <h2>Listado de baches</h2>
+    <em id="contadorLista"></em>
+  </div>
+  <p id="pistaLista">Ordenados por cantidad de reportes. Tocá uno para verlo en el mapa.</p>
+  <ul id="lista"></ul>
+  <div id="vacio" hidden></div>
+</section>
+
+<div id="ayuda">
+  <div class="hoja">
+    <h2>Cómo se usa este mapa</h2>
+    <p>Cada punto es un bache reportado por usuarios de Waze en la zona del
+       convenio. Los datos se actualizan solos <b>dos veces por día</b>, a las
+       6 de la mañana y a las 6 de la tarde.</p>
+
+    <h3>Qué significa el tamaño y el color</h3>
+    <p>Cuántas alertas distintas de Waze cayeron en el mismo lugar. Más
+       reportes = punto más grande. Es la mejor pista de que el bache es
+       grave y está en una calle transitada, pero <b>no reemplaza ir a
+       verlo</b>: un solo reporte también puede ser un pozo importante.</p>
+
+    <h3>El listado de abajo</h3>
+    <ul>
+      <li>Muestra los mismos baches que el mapa, ordenados por cantidad de reportes.</li>
+      <li>Si elegís una zona arriba, la lista se filtra junto con el mapa.</li>
+      <li>Tocá cualquier fila y el mapa se centra en ese bache y abre su ficha.</li>
+    </ul>
+
+    <h3>Ir hasta el bache</h3>
+    <p>Tocá el punto en el mapa y usá el botón <b>Ver en Google Maps</b>: abre
+       la ubicación exacta para navegar hasta ahí.</p>
+
+    <h3>Antes de salir a bachear</h3>
+    <p>Waze no avisa cuándo se tapó un bache: el punto sigue apareciendo hasta
+       que los usuarios dejan de reportarlo. Tomá el mapa como una lista de
+       lugares para ir a verificar, no como un parte de obra.</p>
+
+    <p style="margin-top:18px"><button id="cerrarAyuda">Entendido</button></p>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function(){
+  'use strict';
+
+  var API = 'https://script.google.com/macros/s/AKfycbyRqndpETlPtb-w2kJLhEfRaQBUKHTh3PBooIx06wvOCuc2VyiNr4eYvCdyYmSHd1MOtA/exec';
+  var RECARGA_MS = 30 * 60 * 1000;   // relee cada 30 min por si quedo abierto
+
+  var mapa = L.map('mapa', { zoomControl:true, attributionControl:true })
+              .setView([-26.8241, -65.2226], 12);
+
+  // OpenStreetMap estandar: sin API key ni marca de agua. CARTO ahora exige
+  // clave y estampa "API KEY REQUIRED" sobre todo el mapa.
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap · Alertas: Waze for Cities'
+  }).addTo(mapa);
+
+  var capa = L.layerGroup().addTo(mapa);
+  var todos = [];
+  var marcadores = [];       // mismo orden que las filas de la lista
+  var primeraVez = true;
+
+  function estilo(n){
+    if (n >= 4) return { color:'#c026d3', radio:11, clase:'cuatro' };
+    if (n >= 2) return { color:'#d97706', radio:8,  clase:'dos' };
+    return { color:'#0d9488', radio:5.5, clase:'' };
+  }
+
+  function escapar(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+
+  function textoDias(d){
+    if (!d || d < 1) return 'hoy';
+    if (d < 2) return 'hace 1 día';
+    return 'hace ' + Math.round(d) + ' días';
+  }
+
+  function popup(b){
+    var calle = b.calle ? escapar(b.calle) : 'Sin nombre de calle';
+    var plural = b.reportes === 1 ? 'reporte' : 'reportes';
+    return '<div class="pop-calle">' + calle + '</div>' +
+           '<div class="pop-ciudad">' + escapar(b.ciudad || b.zona) + '</div>' +
+           '<div class="pop-dato"><b>' + b.reportes + '</b> ' + plural + ' de Waze</div>' +
+           '<div class="pop-dato">Primer reporte: ' + textoDias(b.dias) + '</div>' +
+           '<a class="pop-link" target="_blank" rel="noopener" ' +
+           'href="https://www.google.com/maps?q=' + b.lat + ',' + b.lon + '">' +
+           'Ver en Google Maps</a>';
+  }
+
+  /** Centra el mapa en un bache y abre su ficha. */
+  function enfocar(i){
+    var m = marcadores[i];
+    if (!m) return;
+    mapa.setView(m.getLatLng(), Math.max(mapa.getZoom(), 16), { animate:true });
+    m.openPopup();
+
+    var filas = document.querySelectorAll('#lista .item');
+    for (var k = 0; k < filas.length; k++) filas[k].classList.remove('activo');
+    if (filas[i]) filas[i].classList.add('activo');
+
+    // En el celular el mapa queda arriba del listado: hay que subir para verlo.
+    document.getElementById('marco').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  function pintarLista(lista){
+    var ul = document.getElementById('lista');
+    var vacio = document.getElementById('vacio');
+    ul.innerHTML = '';
+
+    document.getElementById('contadorLista').textContent =
+      lista.length === 1 ? '1 bache' : lista.length + ' baches';
+
+    if (!lista.length){
+      vacio.hidden = false;
+      vacio.textContent = 'No hay baches para mostrar con este filtro.';
+      return;
+    }
+    vacio.hidden = true;
+
+    lista.forEach(function(b, i){
+      var e = estilo(b.reportes);
+      var li = document.createElement('li');
+      var plural = b.reportes === 1 ? 'reporte' : 'reportes';
+      var lugar = b.ciudad || b.zona || '';
+
+      li.innerHTML =
+        '<button class="item" type="button">' +
+          '<span class="marca" style="background:' + e.color + '"></span>' +
+          '<span class="cuerpo">' +
+            '<span class="calle">' +
+              (b.calle ? escapar(b.calle) : 'Sin nombre de calle') + '</span>' +
+            '<span class="meta">' + escapar(lugar) +
+              (lugar ? ' · ' : '') + textoDias(b.dias) + '</span>' +
+          '</span>' +
+          '<span class="chip ' + e.clase + '">' + b.reportes + ' ' + plural + '</span>' +
+          '<a class="irMapa" target="_blank" rel="noopener" ' +
+             'href="https://www.google.com/maps?q=' + b.lat + ',' + b.lon + '">Maps</a>' +
+        '</button>';
+
+      // El link a Maps vive adentro del boton: que no dispare tambien el enfoque.
+      li.querySelector('.irMapa').addEventListener('click', function(ev){
+        ev.stopPropagation();
+      });
+      li.querySelector('.item').addEventListener('click', function(){ enfocar(i); });
+
+      ul.appendChild(li);
+    });
+  }
+
+  function dibujar(lista){
+    capa.clearLayers();
+    marcadores = [];
+
+    lista.forEach(function(b){
+      var e = estilo(b.reportes);
+      var m = L.circleMarker([b.lat, b.lon], {
+        radius: e.radio, color:'#ffffff', weight:1.6, opacity:.95,
+        fillColor: e.color, fillOpacity:.9
+      }).bindPopup(popup(b));
+      m.addTo(capa);
+      marcadores.push(m);
+    });
+
+    pintarLista(lista);
+
+    if (lista.length && primeraVez){
+      mapa.fitBounds(L.latLngBounds(lista.map(function(b){ return [b.lat, b.lon]; })),
+                     { padding:[45,45], maxZoom:14 });
+      primeraVez = false;
+    }
+  }
+
+  /** Mas reportes primero; a igualdad, el que lleva mas tiempo sin resolver. */
+  function ordenar(lista){
+    return lista.slice().sort(function(a,b){
+      return (b.reportes - a.reportes) || (b.dias - a.dias);
+    });
+  }
+
+  function llenarZonas(lista){
+    var sel = document.getElementById('filtroZona');
+    var previo = sel.value;
+    var zonas = [];
+    lista.forEach(function(b){
+      if (b.zona && zonas.indexOf(b.zona) === -1) zonas.push(b.zona);
+    });
+    zonas.sort();
+
+    // POKAYOKE: solo se ofrecen zonas que realmente tienen baches, asi nadie
+    // elige un filtro que deja el mapa vacio.
+    sel.innerHTML = '<option value="">Todas las zonas (' + lista.length + ')</option>';
+    zonas.forEach(function(z){
+      var n = lista.filter(function(b){ return b.zona === z; }).length;
+      sel.innerHTML += '<option value="' + escapar(z) + '">' +
+                       escapar(z) + ' (' + n + ')</option>';
+    });
+    if (previo && zonas.indexOf(previo) > -1) sel.value = previo;
+  }
+
+  function aplicarFiltro(){
+    var z = document.getElementById('filtroZona').value;
+    dibujar(ordenar(z ? todos.filter(function(b){ return b.zona === z; }) : todos));
+  }
+
+  function avisar(msg, malo){
+    var el = document.getElementById('aviso');
+    el.textContent = msg;
+    el.className = 'visible' + (malo ? ' malo' : '');
+    if (!malo) setTimeout(function(){ el.className = ''; }, 3200);
+  }
+
+  function fecha(iso){
+    if (!iso) return 'sin datos';
+    var d = new Date(iso);
+    return d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' }) +
+           ' ' + d.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+  }
+
+  function cargar(manual){
+    var boton = document.getElementById('btnActualizar');
+    boton.disabled = true;
+    boton.textContent = 'Actualizando…';
+
+    fetch(API, { cache:'no-store' })
+      .then(function(r){
+        if (!r.ok) throw new Error('El servidor respondió ' + r.status);
+        return r.json();
+      })
+      .then(function(d){
+        if (!d.ok) throw new Error(d.error || 'Respuesta inesperada del servidor');
+        todos = d.baches || [];
+        llenarZonas(todos);
+        aplicarFiltro();
+        document.getElementById('sello').textContent =
+          todos.length + ' baches · ' + fecha(d.actualizado);
+        if (manual) avisar('Datos actualizados');
+        if (!todos.length){
+          avisar('Todavía no hay baches cargados. Corré actualizar() en la planilla.', true);
+        }
+      })
+      .catch(function(err){
+        document.getElementById('sello').textContent = 'sin conexión';
+        avisar('No se pudieron traer los datos. ' + err.message, true);
+      })
+      .then(function(){
+        boton.disabled = false;
+        boton.textContent = 'Actualizar';
+      });
+  }
+
+  document.getElementById('btnActualizar')
+    .addEventListener('click', function(){ cargar(true); });
+  document.getElementById('filtroZona')
+    .addEventListener('change', aplicarFiltro);
+  document.getElementById('btnAyuda').addEventListener('click', function(){
+    document.getElementById('ayuda').classList.add('visible');
+  });
+  document.getElementById('cerrarAyuda').addEventListener('click', function(){
+    document.getElementById('ayuda').classList.remove('visible');
+  });
+  document.getElementById('ayuda').addEventListener('click', function(e){
+    if (e.target === this) this.classList.remove('visible');
+  });
+
+  cargar(false);
+  setInterval(function(){ cargar(false); }, RECARGA_MS);
+
+  if ('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  }
+})();
+</script>
+</body>
+</html>
