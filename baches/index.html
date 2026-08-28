@@ -88,6 +88,18 @@
   }
   #tituloLista h2{font-size:15px;font-weight:650}
   #tituloLista em{font-style:normal;font-size:13px;color:var(--tenue)}
+  #btnReparados{font-size:12px;padding:4px 10px}
+  /* Un bache reparado se ve apagado y tachado: sigue ahi para consultarlo,
+     pero no compite con los que faltan arreglar. */
+  .item.reparado{opacity:.62}
+  .item.reparado .calle{text-decoration:line-through}
+  .chip.rep{background:#f1f5f9;border-color:var(--borde);color:var(--tenue)}
+  .chip.reinc{background:#fdf4ff;border-color:#f0abfc;color:#86198f}
+  .pop-rep{
+    display:block;margin-top:8px;padding:7px 9px;border-radius:7px;
+    background:#f1f5f9;border:1px solid var(--borde);font-size:12.5px;
+  }
+  .pop-rep b{font-weight:650}
   #pistaLista{font-size:12.5px;color:var(--tenue);margin-bottom:11px}
 
   #lista{list-style:none;display:flex;flex-direction:column;gap:8px}
@@ -236,6 +248,7 @@
   <div id="tituloLista">
     <h2>Listado de baches</h2>
     <em id="contadorLista"></em>
+    <button id="btnReparados" hidden aria-pressed="false"></button>
   </div>
   <p id="pistaLista">Ordenados por cantidad de reportes. Tocá uno para verlo en el mapa.</p>
   <ul id="lista"></ul>
@@ -282,6 +295,15 @@
     <h3>Ir hasta el bache</h3>
     <p>Tocá el punto en el mapa y usá el botón <b>Ver en Google Maps</b>: abre
        la ubicación exacta para navegar hasta ahí.</p>
+
+    <h3>Baches ya reparados</h3>
+    <p>Si un bache figura reparado, se saca de la lista y del mapa para que no
+       lo vayas a ver al pedo. El botón <b>Ver reparados</b>, arriba del
+       listado, te los muestra igual, apagados y tachados — no se borran nunca,
+       porque son el registro de lo que se ejecutó.</p>
+    <p>Un caso aparte: si lo reportaron <b>después</b> de haberlo tapado,
+       significa que se volvió a romper. Ese <b>sigue apareciendo</b>, con la
+       etiqueta "se rompió de nuevo".</p>
 
     <h3>Antes de salir a bachear</h3>
     <p>Waze no avisa cuándo se tapó un bache: el punto sigue apareciendo hasta
@@ -381,6 +403,7 @@
   var capa = L.layerGroup().addTo(mapa);
   var contorno = null;   // se dibuja solo mientras el filtro esta activo
   var soloSMT = false;
+  var verReparados = false;
 
   /* Traduccion de la antiguedad que informa chaubache. No hay fecha exacta:
      la fuente solo clasifica en tramos. */
@@ -422,7 +445,7 @@
              escapar(ANTIGUEDAD[b.antiguedad] || 'Reporte vecinal') + '</div>' +
            '<a class="pop-link" target="_blank" rel="noopener" ' +
            'href="https://www.google.com/maps?q=' + b.lat + ',' + b.lon + '">' +
-           'Ver en Google Maps</a>' +
+           'Ver en Google Maps</a>' + textoReparacion(b) +
            '<span class="pop-fuente">Reporte de vecinos, relevado y verificado por ' +
            '<a href="https://chaubache.com/" target="_blank" rel="noopener">chaubache.com</a>' +
            '</span>';
@@ -438,7 +461,42 @@
            '<div class="pop-dato">Primer reporte: ' + textoDias(b.dias) + '</div>' +
            '<a class="pop-link" target="_blank" rel="noopener" ' +
            'href="https://www.google.com/maps?q=' + b.lat + ',' + b.lon + '">' +
-           'Ver en Google Maps</a>';
+           'Ver en Google Maps</a>' + textoReparacion(b);
+  }
+
+  /* El boton solo existe si hay algo que mostrar: sin reparados cargados no
+     tiene sentido ofrecer un filtro que no cambia nada. */
+  function actualizarBotonReparados(cuantos){
+    var b = document.getElementById('btnReparados');
+    if (!cuantos && !verReparados){ b.hidden = true; return; }
+    b.hidden = false;
+    b.setAttribute('aria-pressed', verReparados ? 'true' : 'false');
+    b.textContent = verReparados
+      ? 'Ocultar reparados'
+      : 'Ver ' + cuantos + (cuantos === 1 ? ' reparado' : ' reparados');
+  }
+
+  function textoReparacion(b){
+    if (!b.reparado && !b.reincidente) return '';
+    var cuando = b.reparadoFecha
+      ? new Date(b.reparadoFecha).toLocaleDateString('es-AR',
+          { day:'2-digit', month:'2-digit', year:'numeric' })
+      : null;
+
+    if (b.reincidente){
+      return '<span class="pop-rep"><b>Se volvió a romper.</b> Figura reparado' +
+             (cuando ? ' el ' + cuando : '') + ', pero lo reportaron después. ' +
+             'Sigue en la lista a propósito.</span>';
+    }
+    var tipo = b.reparadoTipo === 'provisorio' ? 'Bacheo provisorio' : 'Reparado';
+    var nota = b.reparadoNota === 'sin_fecha'
+      ? ' <span style="color:var(--tenue)">(sin fecha de reparación: no se pudo ' +
+        'verificar si el reporte es anterior)</span>'
+      : '';
+    return '<span class="pop-rep"><b>' + tipo + '</b>' +
+           (cuando ? ' el ' + cuando : '') +
+           (b.reparadoDist != null ? ' · a ' + b.reparadoDist + ' m del punto' : '') +
+           nota + '</span>';
   }
 
   /** Centra el mapa en un bache y abre su ficha. */
@@ -485,9 +543,11 @@
       var chip = esCB
         ? '<span class="chip cb">chaubache</span>'
         : '<span class="chip ' + e.clase + '">' + b.reportes + ' ' + plural + '</span>';
+      if (b.reincidente) chip = '<span class="chip reinc">se rompió de nuevo</span>';
+      else if (b.reparado) chip = '<span class="chip rep">reparado</span>';
 
       li.innerHTML =
-        '<button class="item" type="button">' +
+        '<button class="item' + (b.reparado ? ' reparado' : '') + '" type="button">' +
           '<span class="marca' + (esCB ? ' cuadrada' : '') + '" ' +
                 'style="background:' + color + '"></span>' +
           '<span class="cuerpo">' +
@@ -566,7 +626,10 @@
       zona: b.zona || '',
       reportes: 1, dias: 0,
       antiguedad: b.antiguedad || '',
-      foto: b.foto || ''
+      foto: b.foto || '',
+      reparado: !!b.reparado, reincidente: !!b.reincidente,
+      reparadoTipo: b.reparadoTipo, reparadoFecha: b.reparadoFecha,
+      reparadoNota: b.reparadoNota, reparadoDist: b.reparadoDist
     };
   }
 
@@ -597,6 +660,11 @@
     if (f) lista = lista.filter(function(b){ return b.origen === f; });
     if (z) lista = lista.filter(function(b){ return b.zona === z; });
     if (soloSMT) lista = lista.filter(function(b){ return dentroDeSMT(b.lat, b.lon); });
+
+    var reparados = lista.filter(function(b){ return b.reparado; }).length;
+    if (!verReparados) lista = lista.filter(function(b){ return !b.reparado; });
+    actualizarBotonReparados(reparados);
+
     dibujar(ordenar(lista));
 
     // El limite se dibuja solo cuando se esta filtrando por el: asi se ve que
@@ -669,6 +737,10 @@
     .addEventListener('change', aplicarFiltro);
   document.getElementById('filtroFuente')
     .addEventListener('change', aplicarFiltro);
+  document.getElementById('btnReparados').addEventListener('click', function(){
+    verReparados = !verReparados;
+    aplicarFiltro();
+  });
   document.getElementById('btnSMT').addEventListener('click', function(){
     soloSMT = !soloSMT;
     this.setAttribute('aria-pressed', soloSMT ? 'true' : 'false');
