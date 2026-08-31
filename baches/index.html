@@ -230,7 +230,13 @@
     background:#fff7ed;border:1px solid #fdba74;color:#9a3412;
     font-size:11px;padding:2px 7px;border-radius:999px;font-weight:650;
   }
-  #btnDescargarPlan{font-size:12.5px;padding:6px 12px;margin-left:auto}
+  #btnInforme{
+    font-size:12.5px;padding:6px 12px;margin-left:auto;
+    background:var(--n1);border-color:var(--n1);color:#fff;font-weight:650;
+  }
+  #btnInforme:hover{filter:brightness(1.08)}
+  #btnDescargarPlan{font-size:12.5px;padding:6px 12px}
+  button.secundario{color:var(--tenue)}
   #ajustesPlan{
     background:var(--panel);border:1px solid var(--borde);border-radius:11px;
     padding:10px 13px;margin:10px 0 12px;font-size:13px;
@@ -372,7 +378,8 @@
   <div id="tituloLista">
     <h2>Planificación por corredores</h2>
     <button id="btnSueltos" hidden aria-pressed="false"></button>
-    <button id="btnDescargarPlan">Descargar CSV</button>
+    <button id="btnInforme">Informe PDF</button>
+    <button id="btnDescargarPlan" class="secundario">CSV</button>
   </div>
   <p id="resumenPlan"></p>
   <div id="cajaRuta">
@@ -1568,6 +1575,173 @@
     }
   }
 
+  /* ── INFORME IMPRIMIBLE ────────────────────────────────────────────────
+     Se arma un documento aparte y se manda a imprimir: desde ahi el navegador
+     ofrece "Guardar como PDF". Se hace asi, y no con una libreria de PDF,
+     porque el mismo papel sirve para darselo en mano a la cuadrilla y porque
+     el diseño se controla con CSS en vez de dibujar coordenadas.
+
+     Va en un iframe oculto y no en una ventana nueva: los bloqueadores de
+     popups la matarian. */
+  function nombreFiltros(){
+    var z = document.getElementById('filtroZona');
+    var f = document.getElementById('filtroFuente');
+    var partes = [];
+    partes.push(z.value ? z.options[z.selectedIndex].text.replace(/\s*\(\d+\)\s*$/, '')
+                        : 'Toda el área');
+    if (f.value) partes.push(f.options[f.selectedIndex].text);
+    if (soloSMT) partes.push('Solo dentro de SMT');
+    return partes.join(' · ');
+  }
+
+  function filaBaches(c){
+    /* Lo util para la cuadrilla son las ALTURAS, no repetir el nombre de la
+       calle que ya esta en negrita al lado. Waze no trae altura, asi que
+       cuando no hay ninguna se dice cuantos puntos son y listo. */
+    var nums = [], otras = [], vistas = {};
+    c.baches.forEach(function(b){
+      var t = (b.calle || '').trim();
+      if (!t) return;
+      var m = t.match(/(\d+)\s*$/);
+      if (m){
+        if (!vistas['n' + m[1]]){ vistas['n' + m[1]] = 1; nums.push(Number(m[1])); }
+      } else if (claveCalle(t) !== claveCalle(c.calle) && !vistas[t.toLowerCase()]){
+        vistas[t.toLowerCase()] = 1;
+        otras.push(t);
+      }
+    });
+    nums.sort(function(a, b){ return a - b; });
+    var partes = [];
+    if (nums.length) partes.push('altura ' + nums.join(', '));
+    if (otras.length) partes.push(otras.join(' · '));
+    if (!partes.length){
+      partes.push(c.baches.length + (c.baches.length === 1
+        ? ' punto sin numeración' : ' puntos sin numeración'));
+    }
+    return partes.join(' — ');
+  }
+
+  function armarInforme(){
+    var esRuta = !!recorrido;
+    var cs = esRuta ? recorrido.corredores : (planActual || []);
+    if (!cs.length){
+      avisar('No hay nada para informar todavía.', true);
+      return;
+    }
+    var hoy = new Date();
+    var fecha = hoy.toLocaleDateString('es-AR',
+      { day:'2-digit', month:'long', year:'numeric' });
+
+    var km = function(m){
+      return m >= 1000 ? (m/1000).toFixed(1).replace('.', ',') + ' km' : m + ' m';
+    };
+    var totalBaches = cs.reduce(function(n, c){ return n + c.baches.length; }, 0);
+    var totalLargo  = cs.reduce(function(n, c){ return n + c.largo; }, 0);
+    var totalTn = (totalBaches * TN_POR_BACHE).toFixed(2).replace('.', ',');
+
+    var cifras = esRuta
+      ? [['Asfalto a aplicar', recorrido.toneladas.toFixed
+            ? recorrido.toneladas.toFixed(2).replace('.', ',') + ' tn'
+            : recorrido.toneladas + ' tn'],
+         ['Baches a reparar', recorrido.baches],
+         ['Paradas', cs.length],
+         ['A recorrer reparando', km(recorrido.largoCorredores)],
+         ['Traslado entre paradas', km(recorrido.traslado)]]
+      : [['Asfalto estimado', totalTn + ' tn'],
+         ['Baches a reparar', totalBaches],
+         ['Corredores', cs.length],
+         ['A recorrer reparando', km(totalLargo)]];
+
+    var filas = cs.map(function(c, i){
+      return '<tr' + (c.centro ? ' class="centro"' : '') + '>' +
+        '<td class="n">' + (i + 1) + '</td>' +
+        '<td><b>' + escapar(c.calle) + '</b>' +
+          (c.centro ? ' <span class="tag">centro</span>' : '') +
+          '<div class="dirs">' + escapar(filaBaches(c)) + '</div></td>' +
+        '<td class="num">' + c.baches.length + '</td>' +
+        '<td class="num">' + (c.baches.length * TN_POR_BACHE).toFixed(2).replace('.', ',') + '</td>' +
+        '<td class="num">' + km(c.largo) + '</td>' +
+        '<td class="num">' + (esRuta && c.salto != null ? km(c.salto) : '—') + '</td>' +
+      '</tr>';
+    }).join('');
+
+    var doc =
+'<!DOCTYPE html><html lang="es-AR"><head><meta charset="utf-8">' +
+'<title>' + (esRuta ? 'Recorrido de bacheo' : 'Planificación de bacheo') + '</title>' +
+'<style>' +
+'@page{size:A4;margin:14mm 12mm}' +
+'*{box-sizing:border-box}' +
+'body{font:11pt/1.4 system-ui,"Segoe UI",Roboto,sans-serif;color:#111;margin:0}' +
+'h1{font-size:19pt;margin:0 0 2px}' +
+'.sub{color:#555;font-size:10pt;margin-bottom:14px}' +
+'.marca{font-size:9pt;letter-spacing:.14em;color:#0d9488;font-weight:700}' +
+'.cifras{display:flex;gap:10px;margin:0 0 14px;flex-wrap:wrap}' +
+'.c{border:1px solid #ccc;border-radius:7px;padding:8px 12px;min-width:104px}' +
+'.c b{display:block;font-size:16pt;line-height:1.15}' +
+'.c span{font-size:8.5pt;color:#555}' +
+'table{width:100%;border-collapse:collapse;font-size:9.5pt}' +
+'thead{display:table-header-group}' +          /* repite el encabezado por hoja */
+'th{text-align:left;background:#f1f5f9;border-bottom:2px solid #94a3b8;' +
+'   padding:6px 7px;font-size:8.5pt;text-transform:uppercase;letter-spacing:.04em}' +
+'td{border-bottom:1px solid #e2e8f0;padding:7px;vertical-align:top}' +
+'tr{page-break-inside:avoid}' +
+'.n{width:26px;font-weight:700;color:#555}' +
+'.num{text-align:right;white-space:nowrap;width:64px}' +
+'.dirs{font-size:8.5pt;color:#555;margin-top:2px}' +
+'.centro td{background:#fff7ed}' +
+'.tag{font-size:7.5pt;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;' +
+'     padding:1px 5px;border-radius:9px;vertical-align:middle}' +
+'.pie{margin-top:14px;font-size:8pt;color:#666;border-top:1px solid #ddd;padding-top:7px}' +
+'.como{background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;' +
+'      padding:9px 11px;font-size:9pt;margin-bottom:14px}' +
+'.como b{display:block;margin-bottom:3px}' +
+'</style></head><body>' +
+'<div class="marca">INGECO S.A.</div>' +
+'<h1>' + (esRuta ? 'Recorrido de bacheo' : 'Planificación de bacheo') + '</h1>' +
+'<div class="sub">' + fecha + ' · ' + escapar(nombreFiltros()) + '</div>' +
+'<div class="cifras">' +
+  cifras.map(function(x){
+    return '<div class="c"><b>' + x[1] + '</b><span>' + x[0] + '</span></div>';
+  }).join('') +
+'</div>' +
+'<div class="como"><b>Cómo se lee</b>' +
+  (esRuta
+    ? 'Las paradas van en el orden en que conviene hacerlas: cada una se completa ' +
+      'de punta a punta antes de pasar a la siguiente. La última columna es lo que ' +
+      'hay que viajar desde la parada anterior.'
+    : 'Cada fila es un tramo de una misma calle para hacer de punta a punta. ' +
+      'Están ordenados por conveniencia: primero el centro, después los que ' +
+      'resuelven más baches de una sola salida.') +
+'</div>' +
+'<table><thead><tr>' +
+  '<th></th><th>Calle y direcciones</th><th class="num">Baches</th>' +
+  '<th class="num">Tn</th><th class="num">Largo</th>' +
+  '<th class="num">' + (esRuta ? 'Traslado' : 'Zona') + '</th>' +
+'</tr></thead><tbody>' + filas + '</tbody></table>' +
+'<div class="pie">Estimado con ' + String(TN_POR_BACHE).replace('.', ',') +
+  ' tn por bache. Los baches surgen de alertas de Waze y de los mapas ' +
+  'vecinales chaubache.com y Mapeo Vecinal de Baches; no reemplazan la ' +
+  'verificación en obra.</div>' +
+'</body></html>';
+
+    var ifr = document.getElementById('impresor');
+    if (ifr) ifr.remove();
+    ifr = document.createElement('iframe');
+    ifr.id = 'impresor';
+    ifr.setAttribute('aria-hidden', 'true');
+    ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+    document.body.appendChild(ifr);
+    ifr.contentDocument.open();
+    ifr.contentDocument.write(doc);
+    ifr.contentDocument.close();
+    // Hay que dejar que el iframe termine de maquetar antes de imprimir.
+    setTimeout(function(){
+      ifr.contentWindow.focus();
+      ifr.contentWindow.print();
+    }, 350);
+    avisar('Informe listo: elegí "Guardar como PDF" en el diálogo');
+  }
+
   function pintarPlan(){
     var lista = ultimaLista || [];
     var cs = recorrido ? recorrido.corredores : armarCorredores(lista);
@@ -1729,6 +1903,8 @@
     .addEventListener('click', function(){ mostrarPestana('plan'); });
   document.getElementById('btnDescargarPlan')
     .addEventListener('click', descargarPlan);
+  document.getElementById('btnInforme')
+    .addEventListener('click', armarInforme);
   document.getElementById('btnSueltos').addEventListener('click', function(){
     verSueltos = !verSueltos;
     pintarPlan();
