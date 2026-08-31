@@ -217,6 +217,7 @@
   }
   .corredor:hover{border-color:var(--n1)}
   .corredor.esCentro{border-left:4px solid var(--n2)}
+  .corredor.activo{border-color:#be123c;box-shadow:0 0 0 2px rgba(190,18,60,.18)}
   .corredor .cuerpo{cursor:pointer}
   .orden{
     flex:none;width:26px;height:26px;border-radius:50%;
@@ -1389,15 +1390,16 @@
           'https://www.google.com/maps/dir/' + c.ini.lat + ',' + c.ini.lon + '/' +
           c.fin.lat + ',' + c.fin.lon + '">Recorrido</a>';
       li.querySelector('.cuerpo').addEventListener('click', function(){
-        verCorredorEnMapa(c);
+        verCorredorEnMapa(c, li);
       });
       cont.appendChild(li);
     });
   }
 
   /** Muestra un corredor en el mapa: cambia de pestana y lo encuadra. */
-  function verCorredorEnMapa(c){
-    mostrarPestana('mapa');
+  function verCorredorEnMapa(c, fila){
+    /* NO se cambia de pestana: el mapa esta arriba en las dos, asi que
+       mandarlo a "Mapa" solo le hacia perder la lista donde estaba parado. */
     var pts = c.baches.map(function(b){ return [b.lat, b.lon]; });
 
     if (trazo) mapa.removeLayer(trazo);
@@ -1413,15 +1415,23 @@
                           fill:false, interactive:false }).addTo(trazo);
     });
 
-    // El mapa estaba oculto: hay que decirle que recalcule su tamano ANTES de
-    // encuadrar, o el fitBounds usa medidas viejas y el corredor queda fuera
-    // de pantalla (se veia un solo bache).
-    var caja = L.latLngBounds(pts).pad(0.35);
     mapa.invalidateSize(false);
-    setTimeout(function(){
-      mapa.invalidateSize(false);
-      mapa.fitBounds(caja, { padding:[40,40], maxZoom:17 });
-    }, 120);
+    mapa.fitBounds(L.latLngBounds(pts).pad(0.35),
+                   { padding:[40,40], maxZoom:17, animate:false });
+
+    // Queda marcado cual se esta mirando, para no perder el hilo en la lista.
+    var previas = document.querySelectorAll('#listaPlan .corredor.activo');
+    for (var i = 0; i < previas.length; i++) previas[i].classList.remove('activo');
+    if (fila) fila.classList.add('activo');
+
+    // Subir al mapa SOLO si no se esta viendo, y descontando el encabezado
+    // fijo: con scrollIntoView a secas el mapa quedaba cortado por arriba.
+    var marco = document.getElementById('marco');
+    var caja = marco.getBoundingClientRect();
+    var alto = document.querySelector('header').offsetHeight;
+    if (caja.top < alto || caja.bottom > window.innerHeight){
+      window.scrollTo({ top: Math.max(0, marco.offsetTop - alto), behavior:'smooth' });
+    }
   }
 
   /** Baja la planificacion como CSV, listo para abrir en Excel. */
