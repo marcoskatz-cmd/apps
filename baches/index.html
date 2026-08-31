@@ -230,6 +230,24 @@
     font-size:11px;padding:2px 7px;border-radius:999px;font-weight:650;
   }
   #btnDescargarPlan{font-size:12.5px;padding:6px 12px;margin-left:auto}
+  #ajustesPlan{
+    background:var(--panel);border:1px solid var(--borde);border-radius:11px;
+    padding:10px 13px;margin:10px 0 12px;font-size:13px;
+  }
+  #ajustesPlan summary{cursor:pointer;font-weight:600;color:var(--n1)}
+  #ajustesPlan[open] summary{margin-bottom:10px}
+  .ajuste{margin:12px 0}
+  .ajuste label{display:block;margin-bottom:5px}
+  .ajuste input[type=range]{
+    width:100%;max-width:420px;accent-color:var(--n1);
+    /* El control nativo mide 16 px de alto: poco para el dedo. El padding
+       agranda el area sensible sin cambiar como se ve. */
+    height:34px;padding:9px 0;box-sizing:content-box;
+  }
+  .ajuste .pista{
+    display:block;font-size:12px;color:var(--tenue);margin-top:3px;
+  }
+  #btnResetAjustes{font-size:12px;padding:5px 10px;margin-top:6px}
 
   .soloAngosto{display:none}
 
@@ -323,6 +341,31 @@
     <button id="btnDescargarPlan">Descargar CSV</button>
   </div>
   <p id="resumenPlan"></p>
+  <details id="ajustesPlan">
+    <summary>Ajustar cómo se arman los corredores</summary>
+    <div class="ajuste">
+      <label for="ajSalto">Cortar el corredor cuando entre dos baches de la
+        misma calle hay más de <b id="valSalto"></b></label>
+      <input type="range" id="ajSalto" min="100" max="1200" step="50">
+      <span class="pista">Más chico parte la calle en tramos cortos; más
+        grande junta cuadras lejanas en un mismo trabajo.</span>
+    </div>
+    <div class="ajuste">
+      <label for="ajMinimo">Mínimo de baches para que sea un corredor:
+        <b id="valMinimo"></b></label>
+      <input type="range" id="ajMinimo" min="1" max="6" step="1">
+      <span class="pista">En 1 entra cada bache suelto y la lista se vuelve
+        enorme; en 3 o más quedan sólo los tramos que justifican la salida.</span>
+    </div>
+    <div class="ajuste">
+      <label for="ajDuplicado">Contar como un solo bache los que están a menos
+        de <b id="valDuplicado"></b></label>
+      <input type="range" id="ajDuplicado" min="0" max="60" step="5">
+      <span class="pista">El mismo pozo suele estar en Waze y en las dos
+        fuentes vecinales. En 0 no se unifica nada y los conteos se inflan.</span>
+    </div>
+    <button id="btnResetAjustes">Volver a los valores por defecto</button>
+  </details>
   <p id="pistaLista">Agrupa los baches en tramos de una misma calle para
      hacerlos de punta a punta. Primero el centro, después los corredores
      que resuelven más baches de una sola salida. Tocá uno para verlo en
@@ -1157,11 +1200,27 @@
 
      Un corredor se corta cuando entre dos baches consecutivos de la misma
      calle hay mas de SALTO_M: mas lejos que eso ya son dos trabajos. */
-  var SALTO_M = 400;
-  /* Un corredor de un solo bache no es un corredor: se listan aparte,
-     porque mover el equipo para un pozo suelto es justo lo que conviene
-     evitar. El boton los muestra igual. */
-  var MIN_BACHES_CORREDOR = 2;
+  /* Parametros de armado, ajustables desde la pestana. Se guardan en el
+     navegador para no tener que reconfigurarlos en cada visita. */
+  var SALTO_M = 400;              // corte entre baches de la misma calle
+  var MIN_BACHES_CORREDOR = 2;    // un pozo suelto no es un corredor
+  var DUPLICADO_M = 25;           // el mismo pozo visto por varias fuentes
+
+  function leerAjustes(){
+    try {
+      var g = JSON.parse(localStorage.getItem('planAjustes') || '{}');
+      if (g.salto) SALTO_M = g.salto;
+      if (g.minimo) MIN_BACHES_CORREDOR = g.minimo;
+      if (g.duplicado != null) DUPLICADO_M = g.duplicado;
+    } catch (e) {}
+  }
+  function guardarAjustes(){
+    try {
+      localStorage.setItem('planAjustes', JSON.stringify({
+        salto: SALTO_M, minimo: MIN_BACHES_CORREDOR, duplicado: DUPLICADO_M
+      }));
+    } catch (e) {}
+  }
 
   /* Nombre de calle sin la altura: las fuentes la traen de formas distintas
      ("Monteagudo 300", "Pasaje Jorge Newbery 259", "José Colombres"). */
@@ -1188,8 +1247,8 @@
   /** Arma los corredores a partir de la lista de baches ya filtrada. */
   /* Un mismo pozo suele estar en dos o tres fuentes a la vez. Para
      planificar hay que contarlo UNA vez, o el corredor miente. */
-  var DUPLICADO_M = 25;
   function unificar(lista){
+    if (!DUPLICADO_M) return lista.slice();   // en 0 no se unifica nada
     var out = [];
     lista.forEach(function(b){
       for (var i = 0; i < out.length; i++){
@@ -1298,7 +1357,9 @@
     var sueltos = armarTodos(lista).filter(function(c){ return c.baches.length < MIN_BACHES_CORREDOR; });
     document.getElementById('resumenPlan').innerHTML =
       '<b>' + cs.length + '</b> corredores · <b>' + totalBaches + '</b> baches a reparar · ' +
-      '<b>' + enCentro.length + '</b> dentro de las cuatro avenidas';
+      '<b>' + enCentro.length + '</b> dentro de las cuatro avenidas' +
+      ' <span style="color:var(--tenue)">· corte ' + SALTO_M + ' m · mínimo ' +
+      MIN_BACHES_CORREDOR + '</span>';
     var bs = document.getElementById('btnSueltos');
     bs.hidden = !sueltos.length && !verSueltos;
     bs.setAttribute('aria-pressed', verSueltos ? 'true' : 'false');
@@ -1431,6 +1492,38 @@
     verSueltos = !verSueltos;
     pintarPlan();
   });
+
+  function refrescarAjustes(){
+    document.getElementById('ajSalto').value = SALTO_M;
+    document.getElementById('ajMinimo').value = MIN_BACHES_CORREDOR;
+    document.getElementById('ajDuplicado').value = DUPLICADO_M;
+    document.getElementById('valSalto').textContent = SALTO_M + ' m';
+    document.getElementById('valMinimo').textContent = MIN_BACHES_CORREDOR;
+    document.getElementById('valDuplicado').textContent =
+      DUPLICADO_M ? DUPLICADO_M + ' m' : 'no unificar';
+  }
+
+  function alMover(id, aplicar){
+    document.getElementById(id).addEventListener('input', function(){
+      aplicar(Number(this.value));
+      refrescarAjustes();
+      guardarAjustes();
+      pintarPlan();
+    });
+  }
+  alMover('ajSalto', function(v){ SALTO_M = v; });
+  alMover('ajMinimo', function(v){ MIN_BACHES_CORREDOR = v; });
+  alMover('ajDuplicado', function(v){ DUPLICADO_M = v; });
+
+  document.getElementById('btnResetAjustes').addEventListener('click', function(){
+    SALTO_M = 400; MIN_BACHES_CORREDOR = 2; DUPLICADO_M = 25;
+    refrescarAjustes();
+    guardarAjustes();
+    pintarPlan();
+  });
+
+  leerAjustes();
+  refrescarAjustes();
 
   cargar(false);
   setInterval(function(){ cargar(false); }, RECARGA_MS);
