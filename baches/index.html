@@ -826,7 +826,10 @@
              (cuando ? ' el ' + cuando : '') + ', pero lo reportaron después. ' +
              'Sigue en la lista a propósito.</span>';
     }
-    var tipo = b.reparadoTipo === 'provisorio' ? 'Bacheo provisorio' : 'Reparado';
+    var tipo = b.reparadoTipo === 'provisorio' ? 'Bacheo provisorio'
+             : b.reparadoTipo === 'repavimentacion'
+               ? 'Repavimentación de ' + escapar(b.reparadoTramo || 'la avenida')
+               : 'Reparado';
     var nota = b.reparadoNota === 'sin_fecha'
       ? ' <span style="color:var(--tenue)">(sin fecha de reparación: no se pudo ' +
         'verificar si el reporte es anterior)</span>'
@@ -985,7 +988,8 @@
       foto: b.foto || '',
       reparado: !!b.reparado, reincidente: !!b.reincidente,
       reparadoTipo: b.reparadoTipo, reparadoFecha: b.reparadoFecha,
-      reparadoNota: b.reparadoNota, reparadoDist: b.reparadoDist
+      reparadoNota: b.reparadoNota, reparadoDist: b.reparadoDist,
+      reparadoTramo: b.reparadoTramo
     };
   }
 
@@ -1007,7 +1011,8 @@
       foto: b.foto || '',
       reparado: !!b.reparado, reincidente: !!b.reincidente,
       reparadoTipo: b.reparadoTipo, reparadoFecha: b.reparadoFecha,
-      reparadoNota: b.reparadoNota, reparadoDist: b.reparadoDist
+      reparadoNota: b.reparadoNota, reparadoDist: b.reparadoDist,
+      reparadoTramo: b.reparadoTramo
     };
   }
 
@@ -1333,9 +1338,29 @@
   function verCorredorEnMapa(c){
     mostrarPestana('mapa');
     var pts = c.baches.map(function(b){ return [b.lat, b.lon]; });
+
     if (trazo) mapa.removeLayer(trazo);
-    trazo = L.polyline(pts, { color:'#be123c', weight:5, opacity:.75 }).addTo(mapa);
-    mapa.fitBounds(L.latLngBounds(pts), { padding:[60,60], maxZoom:17 });
+    trazo = L.layerGroup().addTo(mapa);
+
+    // Halo ancho + linea encima: el corredor se ve aunque abajo haya muchos
+    // marcadores encimados.
+    L.polyline(pts, { color:'#ffffff', weight:12, opacity:.85 }).addTo(trazo);
+    L.polyline(pts, { color:'#be123c', weight:5, opacity:.95 }).addTo(trazo);
+    // Y cada bache del corredor queda anillado, para contarlos de un vistazo.
+    pts.forEach(function(p){
+      L.circleMarker(p, { radius:11, color:'#be123c', weight:3, opacity:.95,
+                          fill:false, interactive:false }).addTo(trazo);
+    });
+
+    // El mapa estaba oculto: hay que decirle que recalcule su tamano ANTES de
+    // encuadrar, o el fitBounds usa medidas viejas y el corredor queda fuera
+    // de pantalla (se veia un solo bache).
+    var caja = L.latLngBounds(pts).pad(0.35);
+    mapa.invalidateSize(false);
+    setTimeout(function(){
+      mapa.invalidateSize(false);
+      mapa.fitBounds(caja, { padding:[40,40], maxZoom:17 });
+    }, 120);
   }
 
   /** Baja la planificacion como CSV, listo para abrir en Excel. */
