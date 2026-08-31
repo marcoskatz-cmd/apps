@@ -191,6 +191,46 @@
   #aviso.visible{display:block}
   #aviso.malo{border-color:var(--n3);color:#86198f}
 
+  /* ── Pestanas ── */
+  #pestanas{
+    display:flex;gap:4px;padding:0 14px;background:var(--panel);
+    border-bottom:1px solid var(--borde);
+  }
+  #pestanas button{
+    border:none;border-bottom:2.5px solid transparent;background:none;
+    border-radius:0;padding:10px 14px;font-size:14px;color:var(--tenue);
+    font-weight:600;
+  }
+  #pestanas button[aria-selected="true"]{
+    color:var(--n1);border-bottom-color:var(--n1);background:none;
+  }
+  #pestanas button:hover{color:var(--texto)}
+
+  /* ── Planificacion ── */
+  #panelPlan{padding:16px 14px 32px;max-width:900px;margin:0 auto}
+  #resumenPlan{font-size:13.5px;margin:2px 0 4px}
+  #listaPlan{list-style:none;display:flex;flex-direction:column;gap:8px}
+  .corredor{
+    display:flex;align-items:center;gap:11px;
+    background:var(--panel);border:1px solid var(--borde);border-radius:11px;
+    padding:11px 13px;min-height:58px;
+  }
+  .corredor:hover{border-color:var(--n1)}
+  .corredor.esCentro{border-left:4px solid var(--n2)}
+  .corredor .cuerpo{cursor:pointer}
+  .orden{
+    flex:none;width:26px;height:26px;border-radius:50%;
+    background:#f1f5f9;border:1px solid var(--borde);
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:700;color:var(--tenue);
+  }
+  .corredor.esCentro .orden{background:#fff7ed;border-color:#fdba74;color:#9a3412}
+  .chip.centro{
+    background:#fff7ed;border:1px solid #fdba74;color:#9a3412;
+    font-size:11px;padding:2px 7px;border-radius:999px;font-weight:650;
+  }
+  #btnDescargarPlan{font-size:12.5px;padding:6px 12px;margin-left:auto}
+
   .soloAngosto{display:none}
 
   @media (max-width:560px){
@@ -244,6 +284,11 @@
   <div class="sello"><span class="punto"></span><span id="sello">cargando…</span></div>
 </header>
 
+<nav id="pestanas" role="tablist">
+  <button id="tabMapa" role="tab" aria-selected="true">Mapa</button>
+  <button id="tabPlan" role="tab" aria-selected="false">Planificación</button>
+</nav>
+
 <div id="marco">
   <div id="mapa"></div>
   <div id="referencias">
@@ -269,6 +314,20 @@
   <p id="pistaLista">Ordenados por cantidad de reportes. Tocá uno para verlo en el mapa.</p>
   <ul id="lista"></ul>
   <div id="vacio" hidden></div>
+</section>
+
+<section id="panelPlan" hidden>
+  <div id="tituloLista">
+    <h2>Planificación por corredores</h2>
+    <button id="btnSueltos" hidden aria-pressed="false"></button>
+    <button id="btnDescargarPlan">Descargar CSV</button>
+  </div>
+  <p id="resumenPlan"></p>
+  <p id="pistaLista">Agrupa los baches en tramos de una misma calle para
+     hacerlos de punta a punta. Primero el centro, después los corredores
+     que resuelven más baches de una sola salida. Tocá uno para verlo en
+     el mapa. Respeta los filtros de zona y fuente.</p>
+  <ul id="listaPlan"></ul>
 </section>
 
 <div id="ayuda">
@@ -567,9 +626,96 @@
            lat < interpolar(LIMITE_PERU, lon, 1, 0);
   }
 
+  /* ── Casco centrico: las "cuatro avenidas" ─────────────────────────────
+     Sarmiento al norte, Avellaneda + Saenz Pena al este, Roca al sur y
+     Mitre + Leandro N. Alem al oeste. Geometrias de OpenStreetMap. */
+  var CENTRO_N = [
+    [-26.81617,-65.21524],[-26.81599,-65.21522],[-26.81603,-65.21515],[-26.81616,-65.21513],[-26.81607,-65.21506],
+    [-26.81616,-65.21504],[-26.81617,-65.21496],[-26.81610,-65.21493],[-26.81637,-65.21393],[-26.81629,-65.21391],
+    [-26.81657,-65.21291],[-26.81663,-65.21259],[-26.81669,-65.21234],[-26.81661,-65.21232],[-26.81672,-65.21219],
+    [-26.81664,-65.21215],[-26.81686,-65.21143],[-26.81679,-65.21142],[-26.81719,-65.20975],[-26.81712,-65.20974],
+    [-26.81713,-65.20967],[-26.81720,-65.20967],[-26.81724,-65.20948],[-26.81716,-65.20947],[-26.81726,-65.20937],
+    [-26.81718,-65.20935],[-26.81743,-65.20808],[-26.81752,-65.20803],[-26.81744,-65.20802],[-26.81747,-65.20779],
+    [-26.81757,-65.20778],[-26.81749,-65.20770],[-26.81759,-65.20768],[-26.81752,-65.20753],[-26.81762,-65.20749],
+    [-26.81778,-65.20628],[-26.81787,-65.20621],[-26.81802,-65.20546],[-26.81804,-65.20534],[-26.81813,-65.20489],
+    [-26.81807,-65.20475],[-26.81817,-65.20469],[-26.81817,-65.20426],[-26.81828,-65.20364],[-26.81844,-65.20329],
+    [-26.81835,-65.20327],[-26.81845,-65.20273],[-26.81871,-65.20180],[-26.81862,-65.20179],[-26.81900,-65.20026],
+    [-26.81893,-65.20024],[-26.81926,-65.19882],[-26.81919,-65.19876],[-26.81954,-65.19735],[-26.81946,-65.19733],
+    [-26.81980,-65.19600],[-26.81982,-65.19587],[-26.81975,-65.19582],[-26.81977,-65.19569],[-26.81998,-65.19504],
+    [-26.81991,-65.19503],[-26.82015,-65.19417],[-26.82006,-65.19415]
+  ];
+  var CENTRO_S = [
+    [-26.84053,-65.22153],[-26.84075,-65.22147],[-26.84055,-65.22143],[-26.84069,-65.22142],[-26.84045,-65.22141],
+    [-26.84066,-65.22139],[-26.84063,-65.22135],[-26.84062,-65.22129],[-26.84060,-65.22120],[-26.84051,-65.22118],
+    [-26.84072,-65.22064],[-26.84084,-65.22002],[-26.84075,-65.21997],[-26.84086,-65.21940],[-26.84098,-65.21934],
+    [-26.84111,-65.21868],[-26.84101,-65.21866],[-26.84112,-65.21858],[-26.84103,-65.21855],[-26.84114,-65.21847],
+    [-26.84105,-65.21844],[-26.84140,-65.21708],[-26.84131,-65.21707],[-26.84146,-65.21624],[-26.84161,-65.21541],
+    [-26.84176,-65.21529],[-26.84191,-65.21394],[-26.84203,-65.21384],[-26.84208,-65.21311],[-26.84225,-65.21227],
+    [-26.84235,-65.21225],[-26.84243,-65.21137],[-26.84245,-65.21123],[-26.84263,-65.21076],[-26.84255,-65.21074],
+    [-26.84290,-65.20938],[-26.84283,-65.20936],[-26.84326,-65.20769],[-26.84317,-65.20767],[-26.84355,-65.20614],
+    [-26.84347,-65.20613],[-26.84383,-65.20465],[-26.84375,-65.20463],[-26.84398,-65.20388],[-26.84411,-65.20315],
+    [-26.84404,-65.20313],[-26.84441,-65.20164],[-26.84433,-65.20163],[-26.84458,-65.20068],[-26.84461,-65.20062],
+    [-26.84466,-65.20057],[-26.84471,-65.20054],[-26.84458,-65.20030]
+  ];
+  var CENTRO_E = [
+    [-26.84476,-65.20006],[-26.84460,-65.20022],[-26.84457,-65.20016],[-26.84452,-65.20011],[-26.84446,-65.20009],
+    [-26.84332,-65.19970],[-26.84330,-65.19981],[-26.84277,-65.19957],[-26.84273,-65.19967],[-26.84250,-65.19951],
+    [-26.84247,-65.19961],[-26.84227,-65.19945],[-26.84224,-65.19956],[-26.84202,-65.19939],[-26.84199,-65.19950],
+    [-26.84083,-65.19908],[-26.84080,-65.19919],[-26.83951,-65.19877],[-26.83940,-65.19885],[-26.83823,-65.19855],
+    [-26.83817,-65.19843],[-26.83773,-65.19833],[-26.83674,-65.19810],[-26.83671,-65.19820],[-26.83541,-65.19777],
+    [-26.83539,-65.19787],[-26.83399,-65.19752],[-26.83398,-65.19742],[-26.83268,-65.19710],[-26.83250,-65.19706],
+    [-26.83248,-65.19714],[-26.83113,-65.19671],[-26.83111,-65.19681],[-26.83038,-65.19656],[-26.82962,-65.19639],
+    [-26.82960,-65.19648],[-26.82824,-65.19606],[-26.82822,-65.19616],[-26.82690,-65.19583],[-26.82688,-65.19572],
+    [-26.82553,-65.19550],[-26.82546,-65.19537],[-26.82423,-65.19517],[-26.82414,-65.19505],[-26.82279,-65.19483],
+    [-26.82274,-65.19471],[-26.82229,-65.19471],[-26.82211,-65.19456],[-26.82152,-65.19452],[-26.82151,-65.19441],
+    [-26.82039,-65.19423],[-26.82017,-65.19407],[-26.82015,-65.19417],[-26.82008,-65.19406],[-26.82006,-65.19415]
+  ];
+  var CENTRO_O = [
+    [-26.85705,-65.22544],[-26.85656,-65.22521],[-26.85654,-65.22531],[-26.85587,-65.22515],[-26.85586,-65.22506],
+    [-26.85538,-65.22494],[-26.85537,-65.22504],[-26.85530,-65.22492],[-26.85528,-65.22502],[-26.85472,-65.22479],
+    [-26.85400,-65.22462],[-26.85399,-65.22472],[-26.85332,-65.22446],[-26.85330,-65.22456],[-26.85275,-65.22433],
+    [-26.85273,-65.22442],[-26.85207,-65.22416],[-26.85206,-65.22426],[-26.85138,-65.22401],[-26.85136,-65.22410],
+    [-26.85073,-65.22385],[-26.85070,-65.22395],[-26.85004,-65.22369],[-26.85002,-65.22379],[-26.84937,-65.22352],
+    [-26.84934,-65.22364],[-26.84868,-65.22336],[-26.84866,-65.22348],[-26.84798,-65.22320],[-26.84796,-65.22331],
+    [-26.84730,-65.22304],[-26.84727,-65.22315],[-26.84663,-65.22287],[-26.84661,-65.22298],[-26.84598,-65.22273],
+    [-26.84596,-65.22283],[-26.84592,-65.22272],[-26.84590,-65.22281],[-26.84570,-65.22277],[-26.84459,-65.22239],
+    [-26.84457,-65.22249],[-26.84401,-65.22235],[-26.84323,-65.22207],[-26.84321,-65.22217],[-26.84188,-65.22175],
+    [-26.84186,-65.22185],[-26.84082,-65.22158],[-26.84075,-65.22158],[-26.84075,-65.22147],[-26.84071,-65.22158],
+    [-26.84065,-65.22159],[-26.84061,-65.22161],[-26.84058,-65.22165],[-26.84055,-65.22143],[-26.84055,-65.22168],
+    [-26.84053,-65.22153],[-26.84052,-65.22172],[-26.84051,-65.22118],[-26.84048,-65.22178],[-26.84046,-65.22126],
+    [-26.84045,-65.22141],[-26.84043,-65.22151],[-26.84042,-65.22130],[-26.84039,-65.22132],[-26.84035,-65.22135],
+    [-26.84029,-65.22137],[-26.84025,-65.22147],[-26.83921,-65.22122],[-26.83916,-65.22109],[-26.83850,-65.22106],
+    [-26.83793,-65.22081],[-26.83776,-65.22077],[-26.83769,-65.22086],[-26.83639,-65.22056],[-26.83636,-65.22046],
+    [-26.83626,-65.22053],[-26.83605,-65.22048],[-26.83599,-65.22037],[-26.83552,-65.22026],[-26.83528,-65.22030],
+    [-26.83462,-65.22006],[-26.83455,-65.22013],[-26.83433,-65.21999],[-26.83354,-65.21980],[-26.83352,-65.21989],
+    [-26.83323,-65.21973],[-26.83318,-65.21972],[-26.83316,-65.21981],[-26.83245,-65.21955],[-26.83243,-65.21965],
+    [-26.83177,-65.21950],[-26.83107,-65.21921],[-26.83105,-65.21932],[-26.83099,-65.21919],[-26.83097,-65.21930],
+    [-26.83043,-65.21918],[-26.82939,-65.21883],[-26.82938,-65.21893],[-26.82848,-65.21872],[-26.82847,-65.21860],
+    [-26.82832,-65.21856],[-26.82829,-65.21867],[-26.82823,-65.21853],[-26.82819,-65.21865],[-26.82800,-65.21847],
+    [-26.82797,-65.21859],[-26.82746,-65.21847],[-26.82677,-65.21817],[-26.82674,-65.21829],[-26.82539,-65.21781],
+    [-26.82537,-65.21791],[-26.82463,-65.21772],[-26.82399,-65.21744],[-26.82394,-65.21754],[-26.82317,-65.21722],
+    [-26.82300,-65.21718],[-26.82260,-65.21707],[-26.82258,-65.21717],[-26.82128,-65.21673],[-26.82126,-65.21682],
+    [-26.81993,-65.21637],[-26.81991,-65.21645],[-26.81862,-65.21601],[-26.81860,-65.21610],[-26.81735,-65.21567],
+    [-26.81728,-65.21576],[-26.81637,-65.21543],[-26.81634,-65.21552],[-26.81629,-65.21539],[-26.81627,-65.21551],
+    [-26.81620,-65.21528],[-26.81616,-65.21553]
+  ];
+
+  /* Adentro de las cuatro avenidas. Se interpola cada eje para respetar que
+     las avenidas no son rectas perfectas. */
+  function enElCentro(lat, lon){
+    return lat < interpolar(CENTRO_N, lon, 1, 0) &&
+           lat > interpolar(CENTRO_S, lon, 1, 0) &&
+           lon < interpolar(CENTRO_E, lat, 0, 1) &&
+           lon > interpolar(CENTRO_O, lat, 0, 1);
+  }
+
   var capa = L.layerGroup().addTo(mapa);
   var contorno = null;   // se dibuja solo mientras el filtro esta activo
   var guias = null;      // limites de la Zona INGECO
+  var trazo = null;      // corredor resaltado desde la planificacion
+  var ultimaLista = [];  // lo que quedo despues de los filtros
+  var planActual = [];   // corredores calculados
+  var verSueltos = false;
   var soloSMT = false;
   var verReparados = false;
 
@@ -904,7 +1050,9 @@
     if (!verReparados) lista = lista.filter(function(b){ return !b.reparado; });
     actualizarBotonReparados(reparados);
 
+    ultimaLista = lista;
     dibujar(ordenar(lista));
+    if (!document.getElementById('panelPlan').hidden) pintarPlan();
 
     // El limite se dibuja solo cuando se esta filtrando por el: asi se ve que
     // quedo adentro y que quedo afuera, en vez de tener que confiar.
@@ -994,6 +1142,269 @@
   });
   document.getElementById('ayuda').addEventListener('click', function(e){
     if (e.target === this) this.classList.remove('visible');
+  });
+
+  /* ── PLANIFICACION POR CORREDORES ──────────────────────────────────────
+     Reparar de a un bache suelto es caro: mover el equipo cuesta mas que
+     tapar el pozo. Asi que se agrupan los baches en CORREDORES -- tramos de
+     una misma calle que se pueden hacer de punta a punta en una salida -- y
+     se ordenan por conveniencia.
+
+     Un corredor se corta cuando entre dos baches consecutivos de la misma
+     calle hay mas de SALTO_M: mas lejos que eso ya son dos trabajos. */
+  var SALTO_M = 400;
+  /* Un corredor de un solo bache no es un corredor: se listan aparte,
+     porque mover el equipo para un pozo suelto es justo lo que conviene
+     evitar. El boton los muestra igual. */
+  var MIN_BACHES_CORREDOR = 2;
+
+  /* Nombre de calle sin la altura: las fuentes la traen de formas distintas
+     ("Monteagudo 300", "Pasaje Jorge Newbery 259", "José Colombres"). */
+  function soloCalle(txt){
+    return String(txt || '')
+      // "Monteagudo y San Martin", "Siria esq. Bolivar", "Maipu entre X e Y":
+      // vale la PRIMERA calle, que es la que define el corredor.
+      .replace(/\s+(y|e|esq\.?|esquina|entre)\s.*$/i, '')
+      .replace(/\s*\/.*$/, '')
+      .replace(/\s+\d+\s*$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function claveCalle(txt){
+    return soloCalle(txt)
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/\b(av|avda|avenida|calle|pje|pasaje|pj)\b\.?/g, ' ')
+      .replace(/[^a-z0-9 ]/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+  }
+
+  /** Arma los corredores a partir de la lista de baches ya filtrada. */
+  /* Un mismo pozo suele estar en dos o tres fuentes a la vez. Para
+     planificar hay que contarlo UNA vez, o el corredor miente. */
+  var DUPLICADO_M = 25;
+  function unificar(lista){
+    var out = [];
+    lista.forEach(function(b){
+      for (var i = 0; i < out.length; i++){
+        if (Math.abs(out[i].lat - b.lat) < 0.0004 &&
+            Math.abs(out[i].lon - b.lon) < 0.0004 &&
+            metros(out[i].lat, out[i].lon, b.lat, b.lon) <= DUPLICADO_M){
+          out[i].fuentes = (out[i].fuentes || 1) + 1;
+          // se queda el que tenga nombre de calle mas informativo
+          if (!out[i].calle && b.calle) out[i].calle = b.calle;
+          return;
+        }
+      }
+      out.push(b);
+    });
+    return out;
+  }
+
+  /** Primera letra en mayuscula, para que el listado se lea prolijo. */
+  function capitalizar(t){
+    var chicas = ['de','del','la','las','los','y','e','el','al','en'];
+    return String(t || '').toLowerCase().split(' ').map(function(p, i){
+      if (i > 0 && chicas.indexOf(p) > -1) return p;   // "Virgen de la Merced"
+      return p.charAt(0).toUpperCase() + p.slice(1);
+    }).join(' ');
+  }
+
+  function armarCorredores(lista){
+    var porCalle = {};
+    unificar(lista).forEach(function(b){
+      if (b.reparado) return;                 // lo reparado no se planifica
+      var k = claveCalle(b.calle);
+      if (!k) k = '(sin calle)';
+      (porCalle[k] = porCalle[k] || []).push(b);
+    });
+
+    var corredores = [];
+    Object.keys(porCalle).forEach(function(k){
+      var ps = porCalle[k];
+      // Ordenar a lo largo de la calle: por la coordenada que mas varia, que
+      // es la que sigue el sentido de la via.
+      var lats = ps.map(function(p){ return p.lat; });
+      var lons = ps.map(function(p){ return p.lon; });
+      var esNS = (Math.max.apply(null, lats) - Math.min.apply(null, lats)) >
+                 (Math.max.apply(null, lons) - Math.min.apply(null, lons));
+      ps.sort(function(a, b){ return esNS ? a.lat - b.lat : a.lon - b.lon; });
+
+      var actual = [ps[0]];
+      for (var i = 1; i < ps.length; i++){
+        var d = metros(ps[i-1].lat, ps[i-1].lon, ps[i].lat, ps[i].lon);
+        if (d > SALTO_M){
+          corredores.push(cerrarCorredor(actual));
+          actual = [];
+        }
+        actual.push(ps[i]);
+      }
+      if (actual.length) corredores.push(cerrarCorredor(actual));
+    });
+
+    return corredores
+      .filter(function(c){
+        return verSueltos || c.baches.length >= MIN_BACHES_CORREDOR;
+      })
+      .sort(function(a, b){
+        // El centro primero; despues, el corredor que resuelve mas baches.
+        if (a.centro !== b.centro) return a.centro ? -1 : 1;
+        if (b.baches.length !== a.baches.length) return b.baches.length - a.baches.length;
+        return b.densidad - a.densidad;
+      });
+  }
+
+  /** Los corredores sin filtrar, para poder contar los sueltos. */
+  function armarTodos(lista){
+    var antes = verSueltos;
+    verSueltos = true;
+    var todos = armarCorredores(lista);
+    verSueltos = antes;
+    return todos;
+  }
+
+  function cerrarCorredor(ps){
+    var ini = ps[0], fin = ps[ps.length - 1];
+    var largo = Math.round(metros(ini.lat, ini.lon, fin.lat, fin.lon));
+    var enCentro = ps.some(function(p){ return enElCentro(p.lat, p.lon); });
+    return {
+      calle: capitalizar(soloCalle(ps[0].calle)) || 'Sin nombre de calle',
+      baches: ps,
+      largo: largo,
+      centro: enCentro,
+      zona: ps[0].zona || '',
+      // baches por cada 100 m: cuanto rinde la cuadrilla en ese tramo
+      densidad: largo > 0 ? (ps.length / (largo / 100)) : ps.length,
+      ini: ini, fin: fin
+    };
+  }
+
+  function pintarPlan(){
+    var lista = ultimaLista || [];
+    var cs = armarCorredores(lista);
+    planActual = cs;
+
+    var cont = document.getElementById('listaPlan');
+    cont.innerHTML = '';
+
+    var enCentro = cs.filter(function(c){ return c.centro; });
+    var totalBaches = cs.reduce(function(n, c){ return n + c.baches.length; }, 0);
+    var sueltos = armarTodos(lista).filter(function(c){ return c.baches.length < MIN_BACHES_CORREDOR; });
+    document.getElementById('resumenPlan').innerHTML =
+      '<b>' + cs.length + '</b> corredores · <b>' + totalBaches + '</b> baches a reparar · ' +
+      '<b>' + enCentro.length + '</b> dentro de las cuatro avenidas';
+    var bs = document.getElementById('btnSueltos');
+    bs.hidden = !sueltos.length && !verSueltos;
+    bs.setAttribute('aria-pressed', verSueltos ? 'true' : 'false');
+    bs.textContent = verSueltos
+      ? 'Ocultar baches sueltos'
+      : 'Sumar ' + sueltos.length + ' baches sueltos';
+
+    if (!cs.length){
+      cont.innerHTML = '<div id="vacio">No hay baches para planificar con este filtro.</div>';
+      return;
+    }
+
+    cs.forEach(function(c, i){
+      var li = document.createElement('li');
+      li.className = 'corredor' + (c.centro ? ' esCentro' : '');
+      li.innerHTML =
+        '<span class="orden">' + (i + 1) + '</span>' +
+        '<span class="cuerpo">' +
+          '<span class="calle">' + escapar(c.calle) +
+            (c.centro ? ' <span class="chip centro">centro</span>' : '') + '</span>' +
+          '<span class="meta">' + c.baches.length +
+            (c.baches.length === 1 ? ' bache' : ' baches') +
+            ' · ' + (c.largo >= 1000 ? (c.largo/1000).toFixed(1) + ' km' : c.largo + ' m') +
+            ' de corredor · ' + escapar(c.zona) + '</span>' +
+        '</span>' +
+        '<a class="irMapa" target="_blank" rel="noopener" href="' +
+          'https://www.google.com/maps/dir/' + c.ini.lat + ',' + c.ini.lon + '/' +
+          c.fin.lat + ',' + c.fin.lon + '">Recorrido</a>';
+      li.querySelector('.cuerpo').addEventListener('click', function(){
+        verCorredorEnMapa(c);
+      });
+      cont.appendChild(li);
+    });
+  }
+
+  /** Muestra un corredor en el mapa: cambia de pestana y lo encuadra. */
+  function verCorredorEnMapa(c){
+    mostrarPestana('mapa');
+    var pts = c.baches.map(function(b){ return [b.lat, b.lon]; });
+    if (trazo) mapa.removeLayer(trazo);
+    trazo = L.polyline(pts, { color:'#be123c', weight:5, opacity:.75 }).addTo(mapa);
+    mapa.fitBounds(L.latLngBounds(pts), { padding:[60,60], maxZoom:17 });
+  }
+
+  /** Baja la planificacion como CSV, listo para abrir en Excel. */
+  function descargarPlan(){
+    if (!planActual || !planActual.length){
+      avisar('No hay nada para descargar todavía.', true);
+      return;
+    }
+    var filas = [['orden','calle','baches','largo_m','centro','zona',
+                  'lat_inicio','lon_inicio','lat_fin','lon_fin','recorrido',
+                  'detalle_baches']];
+    planActual.forEach(function(c, i){
+      var detalle = c.baches.map(function(b){
+        return (b.calle || 's/d') + ' [' + b.origen +
+               (b.fuentes > 1 ? ' +' + (b.fuentes - 1) + ' fuente(s)' : '') + ']';
+      }).join(' ; ');
+      filas.push([
+        i + 1, c.calle, c.baches.length, c.largo, c.centro ? 'SI' : 'NO', c.zona,
+        c.ini.lat.toFixed(6), c.ini.lon.toFixed(6),
+        c.fin.lat.toFixed(6), c.fin.lon.toFixed(6),
+        'https://www.google.com/maps/dir/' + c.ini.lat + ',' + c.ini.lon + '/' +
+          c.fin.lat + ',' + c.fin.lon,
+        detalle
+      ]);
+    });
+
+    var csv = filas.map(function(f){
+      return f.map(function(v){
+        v = String(v == null ? '' : v);
+        return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+      }).join(';');
+    }).join('\r\n');
+
+    // BOM para que Excel en español respete los acentos.
+    var blob = new Blob(['﻿' + csv], { type:'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    var hoy = new Date();
+    a.download = 'planificacion_bacheo_' +
+      hoy.getFullYear() +
+      ('0' + (hoy.getMonth() + 1)).slice(-2) +
+      ('0' + hoy.getDate()).slice(-2) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+    avisar('Planificación descargada');
+  }
+
+  function mostrarPestana(cual){
+    var esMapa = cual === 'mapa';
+    document.getElementById('panelLista').hidden = !esMapa;
+    document.getElementById('panelPlan').hidden = esMapa;
+    document.getElementById('marco').hidden = false;
+    document.getElementById('tabMapa').setAttribute('aria-selected', esMapa);
+    document.getElementById('tabPlan').setAttribute('aria-selected', !esMapa);
+    if (!esMapa) pintarPlan();
+    else if (mapa) setTimeout(function(){ mapa.invalidateSize(); }, 60);
+  }
+
+  document.getElementById('tabMapa')
+    .addEventListener('click', function(){ mostrarPestana('mapa'); });
+  document.getElementById('tabPlan')
+    .addEventListener('click', function(){ mostrarPestana('plan'); });
+  document.getElementById('btnDescargarPlan')
+    .addEventListener('click', descargarPlan);
+  document.getElementById('btnSueltos').addEventListener('click', function(){
+    verSueltos = !verSueltos;
+    pintarPlan();
   });
 
   cargar(false);
