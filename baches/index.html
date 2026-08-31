@@ -249,6 +249,39 @@
     display:block;font-size:12px;color:var(--tenue);margin-top:3px;
   }
   #btnResetAjustes{font-size:12px;padding:5px 10px;margin-top:6px}
+  #cajaRuta{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    background:#f0fdfa;border:1px solid #99f6e4;border-radius:11px;
+    padding:11px 13px;margin:10px 0;font-size:13.5px;
+  }
+  #cajaRuta input[type=number]{
+    width:82px;font:inherit;font-size:15px;font-weight:650;text-align:right;
+    padding:6px 8px;border:1px solid var(--borde);border-radius:8px;
+  }
+  #cajaRuta label{font-weight:600}
+  #equivale{color:var(--tenue);font-size:12.5px}
+  #btnArmarRuta{
+    margin-left:auto;background:var(--n1);border-color:var(--n1);color:#fff;
+    font-weight:650;
+  }
+  #btnArmarRuta:hover{filter:brightness(1.08)}
+  #resumenRuta{
+    background:var(--panel);border:1px solid var(--borde);
+    border-left:4px solid #be123c;border-radius:11px;
+    padding:11px 13px;margin-bottom:12px;font-size:13px;
+  }
+  #resumenRuta .cifras{display:flex;gap:18px;flex-wrap:wrap;margin-top:7px}
+  #resumenRuta .cifra b{display:block;font-size:17px;line-height:1.2}
+  #resumenRuta .cifra span{font-size:11.5px;color:var(--tenue)}
+  .paso{
+    width:22px;height:22px;border-radius:50%;background:#be123c;color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    font-size:11.5px;font-weight:700;border:2px solid #fff;
+    box-shadow:0 1px 3px rgba(15,23,42,.4);
+  }
+  .corredor .salto{
+    font-size:11.5px;color:var(--tenue);display:block;margin-top:2px;
+  }
 
   .soloAngosto{display:none}
 
@@ -342,6 +375,16 @@
     <button id="btnDescargarPlan">Descargar CSV</button>
   </div>
   <p id="resumenPlan"></p>
+  <div id="cajaRuta">
+    <label for="tnAplicar">Voy a aplicar</label>
+    <input type="number" id="tnAplicar" min="0.5" max="500" step="0.5" value="10">
+    <span>tn de asfalto</span>
+    <span id="equivale"></span>
+    <button id="btnArmarRuta">Armar recorrido</button>
+    <button id="btnLimpiarRuta" hidden>Ver todos los corredores</button>
+  </div>
+  <div id="resumenRuta" hidden></div>
+
   <details id="ajustesPlan">
     <summary>Ajustar cómo se arman los corredores</summary>
     <div class="ajuste">
@@ -364,6 +407,20 @@
       <input type="range" id="ajDuplicado" min="0" max="60" step="5">
       <span class="pista">El mismo pozo suele estar en Waze y en las dos
         fuentes vecinales. En 0 no se unifica nada y los conteos se inflan.</span>
+    </div>
+    <div class="ajuste">
+      <label for="ajTn">Asfalto que consume un bache: <b id="valTn"></b></label>
+      <input type="range" id="ajTn" min="0.25" max="2" step="0.025">
+      <span class="pista">Con este número se traduce el tonelaje a cantidad de
+        baches. El valor por defecto, 0,625 tn, es el promedio de INGECO.</span>
+    </div>
+    <div class="ajuste">
+      <label for="ajCercania">Cuánto pesa la cercanía al armar el recorrido:
+        <b id="valCercania"></b></label>
+      <input type="range" id="ajCercania" min="0" max="2.5" step="0.1">
+      <span class="pista">En 0 arma la ruta sólo por rendimiento y puede
+        mandarte de una punta a la otra. Más alto prioriza no moverse, aunque
+        deje corredores grandes para después.</span>
     </div>
     <button id="btnResetAjustes">Volver a los valores por defecto</button>
   </details>
@@ -426,6 +483,18 @@
     <h3>Ir hasta el bache</h3>
     <p>Tocá el punto en el mapa y usá el botón <b>Ver en Google Maps</b>: abre
        la ubicación exacta para navegar hasta ahí.</p>
+
+    <h3>Armar el recorrido de una salida</h3>
+    <p>En <b>Planificación</b> ponés cuántas toneladas de asfalto vas a aplicar
+       y el sistema arma la salida: elige los corredores que entran con ese
+       material y los ordena para que se viaje lo menos posible entre uno y
+       otro. En el mapa quedan numerados, con el traslado entre paradas
+       punteado.</p>
+    <p>El resumen te dice cuánto del recorrido es <b>trabajo</b> y cuánto es
+       traslado. Si ese porcentaje es bajo, conviene subir el peso de la
+       cercanía en los ajustes, o hacer menos toneladas por salida.</p>
+    <p>La cuenta usa <b>0,625 tn por bache</b>, que es el promedio de INGECO.
+       Se puede cambiar en los ajustes.</p>
 
     <h3>Baches ya reparados</h3>
     <p>Si un bache figura reparado, se saca de la lista y del mapa para que no
@@ -760,6 +829,7 @@
   var ultimaLista = [];  // lo que quedo despues de los filtros
   var planActual = [];   // corredores calculados
   var verSueltos = false;
+  var rutaTrazo = null;   // el recorrido dibujado
   var soloSMT = false;
   var verReparados = false;
 
@@ -1213,12 +1283,15 @@
       if (g.salto) SALTO_M = g.salto;
       if (g.minimo) MIN_BACHES_CORREDOR = g.minimo;
       if (g.duplicado != null) DUPLICADO_M = g.duplicado;
+      if (g.tn) TN_POR_BACHE = g.tn;
+      if (g.cercania != null) PESO_CERCANIA = g.cercania;
     } catch (e) {}
   }
   function guardarAjustes(){
     try {
       localStorage.setItem('planAjustes', JSON.stringify({
-        salto: SALTO_M, minimo: MIN_BACHES_CORREDOR, duplicado: DUPLICADO_M
+        salto: SALTO_M, minimo: MIN_BACHES_CORREDOR, duplicado: DUPLICADO_M,
+        tn: TN_POR_BACHE, cercania: PESO_CERCANIA
       }));
     } catch (e) {}
   }
@@ -1345,10 +1418,162 @@
     };
   }
 
+  /* ── ARMADO DE RECORRIDO POR TONELAJE ──────────────────────────────────
+     Se parte de cuanto asfalto hay para aplicar y se arma la salida:
+     que corredores entran y en que orden conviene hacerlos.
+
+     El armado es goloso: en cada paso elige el corredor que mejor combina
+     "cuanto resuelve" con "que cerca esta del anterior". No busca el optimo
+     -- eso es un problema del viajante y no vale la pena para 15 paradas --
+     pero evita el zigzag, que es lo que de verdad cuesta plata. */
+  var TN_POR_BACHE = 0.625;
+  var PESO_CERCANIA = 1.0;   // 0 = ignora la distancia; 2 = casi solo cercania
+  var recorrido = null;      // el plan armado, si hay uno
+
+  function bachesQueEntran(tn){
+    return Math.max(1, Math.floor(tn / TN_POR_BACHE));
+  }
+
+  /** Distancia entre dos corredores: de la punta de uno a la punta del otro. */
+  function saltoEntre(a, b){
+    return Math.min(
+      metros(a.fin.lat, a.fin.lon, b.ini.lat, b.ini.lon),
+      metros(a.fin.lat, a.fin.lon, b.fin.lat, b.fin.lon)
+    );
+  }
+
+  /**
+   * Arma la salida. Devuelve la secuencia de corredores y sus numeros.
+   * cupo = cuantos baches entran con el asfalto disponible.
+   */
+  function armarRecorrido(corredores, cupo){
+    var quedan = corredores.slice();
+    var ruta = [], usados = 0, traslado = 0, actual = null;
+
+    while (quedan.length && usados < cupo){
+      var mejor = -1, mejorPuntaje = -Infinity, mejorD = 0;
+
+      for (var i = 0; i < quedan.length; i++){
+        var c = quedan[i];
+        // No meter un corredor que no entra entero: cortar un tramo por la
+        // mitad es justo lo que se quiere evitar.
+        if (usados + c.baches.length > cupo && ruta.length) continue;
+
+        var d = actual ? saltoEntre(actual, c) : 0;
+        // Rinde = baches resueltos. Se castiga la distancia al anterior y se
+        // premia el centro, que es prioridad por decision de obra.
+        var puntaje = (c.baches.length * (c.centro ? 1.6 : 1)) /
+                      (1 + PESO_CERCANIA * (d / 1000));
+        if (puntaje > mejorPuntaje){
+          mejorPuntaje = puntaje; mejor = i; mejorD = d;
+        }
+      }
+      if (mejor < 0) break;
+
+      var elegido = quedan.splice(mejor, 1)[0];
+      elegido.salto = Math.round(mejorD);
+      ruta.push(elegido);
+      usados += elegido.baches.length;
+      traslado += mejorD;
+      actual = elegido;
+    }
+
+    var largoCorredores = ruta.reduce(function(n, c){ return n + c.largo; }, 0);
+    return {
+      corredores: ruta,
+      baches: usados,
+      toneladas: +(usados * TN_POR_BACHE).toFixed(2),
+      traslado: Math.round(traslado),
+      largoCorredores: Math.round(largoCorredores),
+      enCentro: ruta.filter(function(c){ return c.centro; }).length
+    };
+  }
+
+  function pintarResumenRuta(){
+    var caja = document.getElementById('resumenRuta');
+    if (!recorrido){ caja.hidden = true; return; }
+    caja.hidden = false;
+    var r = recorrido;
+    var km = function(m){ return m >= 1000 ? (m/1000).toFixed(1) + ' km' : m + ' m'; };
+    // Cuanto del viaje es trabajo y cuanto es puro traslado.
+    var util = r.largoCorredores + r.traslado;
+    var pct = util ? Math.round(100 * r.largoCorredores / util) : 0;
+    caja.innerHTML =
+      '<b>Recorrido armado</b> · ' + r.corredores.length + ' paradas, ' +
+      r.enCentro + ' en el centro' +
+      '<div class="cifras">' +
+        '<span class="cifra"><b>' + r.toneladas + ' tn</b><span>asfalto a aplicar</span></span>' +
+        '<span class="cifra"><b>' + r.baches + '</b><span>baches</span></span>' +
+        '<span class="cifra"><b>' + km(r.largoCorredores) + '</b><span>de corredores</span></span>' +
+        '<span class="cifra"><b>' + km(r.traslado) + '</b><span>de traslado entre corredores</span></span>' +
+        '<span class="cifra"><b>' + pct + '%</b><span>del recorrido es trabajo</span></span>' +
+      '</div>';
+  }
+
+  function calcularRecorrido(){
+    var tn = Number(document.getElementById('tnAplicar').value) || 0;
+    if (tn <= 0){
+      avisar('Poné cuántas toneladas vas a aplicar.', true);
+      return;
+    }
+    var cupo = bachesQueEntran(tn);
+    var cs = armarCorredores(ultimaLista || []);
+    if (!cs.length){
+      avisar('No hay corredores para armar el recorrido con estos filtros.', true);
+      return;
+    }
+    recorrido = armarRecorrido(cs, cupo);
+    pintarPlan();
+    dibujarRecorrido();
+    avisar('Recorrido armado: ' + recorrido.corredores.length + ' paradas');
+  }
+
+  function limpiarRecorrido(){
+    recorrido = null;
+    if (rutaTrazo){ mapa.removeLayer(rutaTrazo); rutaTrazo = null; }
+    pintarPlan();
+  }
+
+  /** Dibuja el recorrido completo: cada corredor y los traslados entre ellos. */
+  function dibujarRecorrido(){
+    if (rutaTrazo){ mapa.removeLayer(rutaTrazo); rutaTrazo = null; }
+    if (!recorrido || !recorrido.corredores.length) return;
+
+    rutaTrazo = L.layerGroup().addTo(mapa);
+    var todos = [];
+
+    recorrido.corredores.forEach(function(c, i){
+      var pts = c.baches.map(function(b){ return [b.lat, b.lon]; });
+      todos = todos.concat(pts);
+      L.polyline(pts, { color:'#ffffff', weight:11, opacity:.85, interactive:false }).addTo(rutaTrazo);
+      L.polyline(pts, { color:'#be123c', weight:5, opacity:.95, interactive:false }).addTo(rutaTrazo);
+      // El traslado hasta el corredor siguiente va punteado: se ve enseguida
+      // cuanto se viaja sin reparar nada.
+      var sig = recorrido.corredores[i + 1];
+      if (sig){
+        L.polyline([[c.fin.lat, c.fin.lon], [sig.ini.lat, sig.ini.lon]],
+                   { color:'#0f766e', weight:2.5, opacity:.8, dashArray:'7,6',
+                     interactive:false }).addTo(rutaTrazo);
+      }
+      L.marker([c.ini.lat, c.ini.lon], {
+        icon: L.divIcon({ className:'', html:'<div class="paso">' + (i+1) + '</div>',
+                          iconSize:[22,22], iconAnchor:[11,11] })
+      }).addTo(rutaTrazo);
+    });
+
+    if (todos.length){
+      mapa.invalidateSize(false);
+      mapa.fitBounds(L.latLngBounds(todos).pad(0.15),
+                     { padding:[40,40], maxZoom:16, animate:false });
+    }
+  }
+
   function pintarPlan(){
     var lista = ultimaLista || [];
-    var cs = armarCorredores(lista);
+    var cs = recorrido ? recorrido.corredores : armarCorredores(lista);
     planActual = cs;
+    document.getElementById('btnLimpiarRuta').hidden = !recorrido;
+    pintarResumenRuta();
 
     var cont = document.getElementById('listaPlan');
     cont.innerHTML = '';
@@ -1385,6 +1610,9 @@
             (c.baches.length === 1 ? ' bache' : ' baches') +
             ' · ' + (c.largo >= 1000 ? (c.largo/1000).toFixed(1) + ' km' : c.largo + ' m') +
             ' de corredor · ' + escapar(c.zona) + '</span>' +
+          (recorrido && c.salto
+            ? '<span class="salto">↳ ' + c.salto + ' m de traslado desde el anterior</span>'
+            : '') +
         '</span>' +
         '<a class="irMapa" target="_blank" rel="noopener" href="' +
           'https://www.google.com/maps/dir/' + c.ini.lat + ',' + c.ini.lon + '/' +
@@ -1440,7 +1668,8 @@
       avisar('No hay nada para descargar todavía.', true);
       return;
     }
-    var filas = [['orden','calle','baches','largo_m','centro','zona',
+    var filas = [['orden','calle','baches','toneladas','largo_m',
+                  'traslado_desde_anterior_m','centro','zona',
                   'lat_inicio','lon_inicio','lat_fin','lon_fin','recorrido',
                   'detalle_baches']];
     planActual.forEach(function(c, i){
@@ -1449,7 +1678,9 @@
                (b.fuentes > 1 ? ' +' + (b.fuentes - 1) + ' fuente(s)' : '') + ']';
       }).join(' ; ');
       filas.push([
-        i + 1, c.calle, c.baches.length, c.largo, c.centro ? 'SI' : 'NO', c.zona,
+        i + 1, c.calle, c.baches.length,
+        (c.baches.length * TN_POR_BACHE).toFixed(3).replace('.', ','),
+        c.largo, (c.salto != null ? c.salto : ''), c.centro ? 'SI' : 'NO', c.zona,
         c.ini.lat.toFixed(6), c.ini.lon.toFixed(6),
         c.fin.lat.toFixed(6), c.fin.lon.toFixed(6),
         'https://www.google.com/maps/dir/' + c.ini.lat + ',' + c.ini.lon + '/' +
@@ -1470,7 +1701,7 @@
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     var hoy = new Date();
-    a.download = 'planificacion_bacheo_' +
+    a.download = (recorrido ? 'recorrido_bacheo_' : 'planificacion_bacheo_') +
       hoy.getFullYear() +
       ('0' + (hoy.getMonth() + 1)).slice(-2) +
       ('0' + hoy.getDate()).slice(-2) + '.csv';
@@ -1511,6 +1742,13 @@
     document.getElementById('valMinimo').textContent = MIN_BACHES_CORREDOR;
     document.getElementById('valDuplicado').textContent =
       DUPLICADO_M ? DUPLICADO_M + ' m' : 'no unificar';
+    document.getElementById('ajTn').value = TN_POR_BACHE;
+    document.getElementById('ajCercania').value = PESO_CERCANIA;
+    document.getElementById('valTn').textContent =
+      String(TN_POR_BACHE).replace('.', ',') + ' tn';
+    document.getElementById('valCercania').textContent =
+      PESO_CERCANIA === 0 ? 'nada' : String(PESO_CERCANIA).replace('.', ',');
+    if (document.getElementById('equivale')) refrescarEquivale();
   }
 
   function alMover(id, aplicar){
@@ -1524,16 +1762,29 @@
   alMover('ajSalto', function(v){ SALTO_M = v; });
   alMover('ajMinimo', function(v){ MIN_BACHES_CORREDOR = v; });
   alMover('ajDuplicado', function(v){ DUPLICADO_M = v; });
+  alMover('ajTn', function(v){ TN_POR_BACHE = v; });
+  alMover('ajCercania', function(v){ PESO_CERCANIA = v; });
 
   document.getElementById('btnResetAjustes').addEventListener('click', function(){
     SALTO_M = 400; MIN_BACHES_CORREDOR = 2; DUPLICADO_M = 25;
+    TN_POR_BACHE = 0.625; PESO_CERCANIA = 1.0;
     refrescarAjustes();
     guardarAjustes();
     pintarPlan();
   });
 
+  function refrescarEquivale(){
+    var tn = Number(document.getElementById('tnAplicar').value) || 0;
+    document.getElementById('equivale').textContent =
+      tn > 0 ? '≈ ' + bachesQueEntran(tn) + ' baches' : '';
+  }
+  document.getElementById('tnAplicar').addEventListener('input', refrescarEquivale);
+  document.getElementById('btnArmarRuta').addEventListener('click', calcularRecorrido);
+  document.getElementById('btnLimpiarRuta').addEventListener('click', limpiarRecorrido);
+
   leerAjustes();
   refrescarAjustes();
+  refrescarEquivale();
 
   cargar(false);
   setInterval(function(){ cargar(false); }, RECARGA_MS);
