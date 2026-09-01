@@ -1,6 +1,6 @@
 // Cache minimo: solo el armazon. Los datos NUNCA se cachean, para que el
 // mapa no muestre baches viejos despues de una actualizacion.
-var CACHE = 'baches-v18';
+var CACHE = 'baches-v19';
 var ARMAZON = ['./', './index.html', './manifest.json', './icono.svg'];
 
 self.addEventListener('install', function(e){
