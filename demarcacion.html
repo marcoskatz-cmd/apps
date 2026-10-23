@@ -283,7 +283,26 @@
   }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+  // Caché local: lo último que se trajo se muestra al instante y se refresca por detrás
+  // (cada llamada a Apps Script tarda ~3 s). Solo lectura: nada se escribe desde acá.
+  function leerLocal(k) { try { return JSON.parse(localStorage.getItem('demarc_' + k) || 'null'); } catch (e) { return null; } }
+  function guardarLocal(k, v) { try { localStorage.setItem('demarc_' + k, JSON.stringify(v)); } catch (e) {} }
+  function aplicarConfig(c) {
+    estado.obra = c.obra;
+    $('titulo').textContent = 'Demarcación Vial — ' + c.obra;
+    document.title = 'Ingeco - Demarcación Vial - ' + c.obra;
+    if (c.logo) $('logo').src = c.logo;
+  }
+  function pintarOperarios(list) {
+    const sel = $('operario-select'), elegido = sel.value;  // no perder lo que ya eligió
+    sel.innerHTML = '<option value="">Elegí tu nombre</option>' + list.map(n => '<option>' + esc(n) + '</option>').join('');
+    if (elegido && list.indexOf(elegido) >= 0) sel.value = elegido;
+  }
+  { const c = leerLocal('config'); if (c && c.obra) aplicarConfig(c); }
+  { const l = leerLocal('operarios'); if (Array.isArray(l) && l.length) pintarOperarios(l); }
+
   api('config').then(c => {
+    guardarLocal('config', c);
     // Se guarda en estado: mostrar() reescribe el título en cada cambio de vista
     // y la obra solo corresponde en el login y el menú.
     estado.obra = c.obra;
@@ -293,8 +312,9 @@
   }).catch(() => {});
 
   api('listarOperarios').then(list => {
-    $('operario-select').innerHTML = '<option value="">Elegí tu nombre</option>' + list.map(n => '<option>' + esc(n) + '</option>').join('');
-  }).catch(() => { $('operario-select').innerHTML = '<option value="">(error al cargar)</option>'; });
+    guardarLocal('operarios', list);
+    pintarOperarios(list);
+  }).catch(() => { if (!leerLocal('operarios')) $('operario-select').innerHTML = '<option value="">(error al cargar)</option>'; });
 
   async function login() {
     const pin = $('pin-input').value.trim();
@@ -361,13 +381,24 @@
   function driveId(url) { const m = String(url).match(/[-\w]{25,}/); return m ? m[0] : ''; }
   function driveThumb(url, w) { const id = driveId(url); return id ? ('https://drive.google.com/thumbnail?id=' + id + '&sz=w' + (w||200)) : ''; }
 
-  async function cargarHistorial() {
-    $('lista-hist').innerHTML = '<p class="empty"><span class="spinner"></span>Cargando...</p>';
+  // Muestra al instante lo último guardado en este celular y actualiza por detrás.
+  // sinBorrar: hay datos válidos en pantalla (p. ej. recién guardado) y no se tapan con "Cargando".
+  async function cargarHistorial(sinBorrar) {
+    const clave = 'hist_' + estado.operario;
+    const previo = leerLocal(clave);
+    if (!sinBorrar) {
+      if (Array.isArray(previo)) { estado.trabajos = previo; renderHistorial(); }
+      else $('lista-hist').innerHTML = '<p class="empty"><span class="spinner"></span>Cargando...</p>';
+    }
+    const hayAlgo = sinBorrar || Array.isArray(previo);
     try {
-      estado.trabajos = await api('listarTrabajosOperario', { pin: estado.pin, operario: estado.operario });
+      const nuevos = await api('listarTrabajosOperario', { pin: estado.pin, operario: estado.operario });
+      guardarLocal(clave, nuevos);
+      estado.trabajos = nuevos;
       renderHistorial();
     } catch (err) {
-      $('lista-hist').innerHTML = '<p class="empty">Error al cargar: ' + esc(err.message || err) + '</p>';
+      if (hayAlgo) toast('No se pudo actualizar: ' + (err.message || err), 4000);
+      else $('lista-hist').innerHTML = '<p class="empty">Error al cargar: ' + esc(err.message || err) + '</p>';
     }
   }
 
@@ -484,10 +515,19 @@
       if (tocados.has('m2')) payload.m2 = m2;
       if (tocados.has('obs')) payload.obs = $('det-obs').value.trim();
       if (d.fotoDespues) payload.fotoDespues = d.fotoDespues;
+      // Se espera la respuesta a propósito: puede llevar la foto del después
+      // y no se puede perder en silencio. Lo que se ahorra es la segunda espera:
+      // la lista se corrige acá mismo y se confirma con el servidor por detrás.
       await api('actualizarTrabajo', { payload: payload });
       toast('✓ Cambios guardados');
+      const t = (estado.trabajos || []).find(x => String(x.id) === String(d.id));
+      if (t) {
+        ['tipoTrabajo','tipoPintura','color','m2','obs'].forEach(k => { if (k in payload) t[k] = payload[k]; });
+        if (payload.fotoDespues) t.pendiente = false;
+      }
       mostrar('historial');
-      await cargarHistorial();
+      renderHistorial();
+      cargarHistorial(true);
     } catch (err) {
       toast('Error: ' + (err.message || err), 4000);
       btn.disabled = false;

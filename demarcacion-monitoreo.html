@@ -209,7 +209,16 @@
       await api('validarPin', { pin: pin, rol: 'monitoreo' });
       estado.pin = pin;
       mostrar('monitoreo');
-      cargarMonitoreo();
+      // Lo último traído en este dispositivo se ve enseguida; los datos frescos llegan por detrás.
+      let previo = null;
+      try { previo = JSON.parse(localStorage.getItem('demarc_monitoreo') || 'null'); } catch (e) {}
+      if (previo && Array.isArray(previo.trabajos)) {
+        estado.trabajos = previo.trabajos;
+        ['f-desde','f-hasta','f-pintura','f-color','f-calle'].forEach(id => $(id).oninput = render);
+        initMapa(); render();
+        estado.actualizado = new Date(previo.t); pintarActualizado();
+        cargarMonitoreo(true);
+      } else cargarMonitoreo();
     } catch (err) {
       // El backend habla de "PIN" porque el mensaje lo comparte con la vista de
       // carga, donde sí es numérico. Acá es una contraseña alfanumérica.
@@ -241,6 +250,7 @@
     btn.innerHTML = '<span class="spinner"></span>Actualizando...';
     try {
       estado.trabajos = await api('listarTrabajos', { pin: estado.pin });
+      try { localStorage.setItem('demarc_monitoreo', JSON.stringify({ t: Date.now(), trabajos: estado.trabajos })); } catch (e) {}
       ['f-desde','f-hasta','f-pintura','f-color','f-calle'].forEach(id => $(id).oninput = render);
       initMapa();
       render();  // respeta los filtros que ya estén puestos
