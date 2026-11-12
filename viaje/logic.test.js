@@ -10,6 +10,9 @@ test('toCents acepta coma decimal y punto de miles', () => {
   assert.strictEqual(L.toCents('12'), 1200);
   assert.strictEqual(L.toCents('0,01'), 1);
   assert.ok(isNaN(L.toCents('abc')));
+  assert.strictEqual(L.toCents('12.5'), 1250);
+  assert.strictEqual(L.toCents('1.250'), 125000);
+  assert.strictEqual(L.parseNum('0,14'), 0.14);
 });
 
 test('fromCents formatea estilo es-AR', () => {
@@ -80,4 +83,38 @@ test('mergeById gana el más nuevo', () => {
   const m = L.mergeById(a, b);
   assert.strictEqual(m.length, 2);
   assert.strictEqual(m.find(x => x.id === '1').v, 'nuevo');
+});
+
+test('convertBalances suma cero y respeta el tipo de cambio', () => {
+  const c = L.convertBalances({ A: 1001, B: -500, C: -501 }, 0.333);
+  assert.strictEqual(Object.values(c).reduce((a, b) => a + b, 0), 0);
+  assert.ok(Math.abs(c.B - (-167)) <= 1);
+});
+
+test('conversión opcional: todo se netea en una sola moneda', () => {
+  const ex = [
+    { id: '1', payer: 'Ana', amount: 40000, currency: 'CNY', split: ['Ana', 'Beto'], createdAt: 1 },
+    { id: '2', payer: 'Beto', amount: 10000, currency: 'USD', split: ['Ana', 'Beto'], createdAt: 2 },
+  ];
+  // sin convertir: dos transferencias en monedas distintas
+  const s0 = L.settleAll(ex);
+  assert.deepStrictEqual(Object.keys(s0), ['CNY', 'USD']);
+  // convertir CNY a USD a 0,14
+  const b = L.balances(ex);
+  ex.push({ id: 'fx', type: 'fx', from: 'CNY', to: 'USD', rate: 0.14, amounts: b.CNY, conv: L.convertBalances(b.CNY, 0.14), createdAt: 3 });
+  const s1 = L.settleAll(ex);
+  assert.deepStrictEqual(Object.keys(s1), ['USD']);
+  // Ana tenía +200 CNY = +28 USD, debía 50 USD -> Ana paga 22 USD a Beto
+  assert.deepStrictEqual(s1.USD, [{ from: 'Ana', to: 'Beto', amount: 2200 }]);
+});
+
+test('summary: pagó, parte, pagos y saldo', () => {
+  const ex = [
+    { id: '1', payer: 'Ana', amount: 900, currency: 'CNY', split: ['Ana', 'Beto', 'Caro'] },
+    { id: '2', payer: 'Beto', amount: 300, currency: 'CNY', split: ['Ana'], settlement: true },
+  ];
+  const s = L.summary(ex).CNY;
+  assert.deepStrictEqual(s.Ana, { pagado: 900, parte: 300, pagos: -300, convertido: 0, saldo: 300 });
+  assert.strictEqual(s.Beto.saldo, 0);
+  assert.strictEqual(s.Caro.saldo, -300);
 });
