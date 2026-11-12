@@ -5,7 +5,8 @@ App para dividir gastos de un viaje en grupo, tipo Splitwise, con una diferencia
 "Juan le paga 500 CNY a Pedro" y "Marcos le paga 50 USD a Juan".
 
 - URL: https://marcoskatz-cmd.github.io/apps/viaje/
-- Sin cuentas: cada viaje tiene un link secreto; quien lo tiene puede ver y cargar.
+- Por ahora hay **un solo viaje** (id fijo `VIAJE` en `index.html`): todos ven lo mismo, se abra desde el link o desde el ícono de la pantalla de inicio. La primera persona que abre la app lo arma. Para un viaje nuevo, cambiar `VIAJE` por otro id aleatorio de 22 caracteres.
+- Sin cuentas: quien tiene el link puede ver y cargar.
 - Funciona sin señal: lo cargado queda en el celular y se sube cuando vuelve la conexión.
 - Instalable en el celular (Agregar a pantalla de inicio).
 - No figura en el menú de Apps INGECO: es personal.
