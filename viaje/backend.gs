@@ -3,8 +3,22 @@
  * Una sola acción: sync. El cliente manda lo que cambió y recibe todo el viaje.
  * El id del viaje (aleatorio, 22 caracteres) es la clave de acceso: quien tiene el link entra.
  */
+const SHEET_ID = '1FgNO-g5-JjBNJJ4w1pfArniqXZ1XwKJyp70ckH5G_7s'; // planilla "Gastos de viaje — datos"
 const HOJA_VIAJES = 'Viajes';   // tripId | json | updatedAt
 const HOJA_GASTOS = 'Gastos';   // tripId | id | json | updatedAt
+
+/**
+ * Ejecutar UNA VEZ desde el editor (botón Ejecutar con "setup" elegido):
+ * crea las pestañas y dispara el pedido de permisos de Google.
+ */
+function setup() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  hoja_(ss, HOJA_VIAJES, ['tripId', 'json', 'updatedAt']);
+  hoja_(ss, HOJA_GASTOS, ['tripId', 'id', 'json', 'updatedAt']);
+  const sobra = ss.getSheetByName('Hoja 1') || ss.getSheetByName('Sheet1');
+  if (sobra && ss.getSheets().length > 1) ss.deleteSheet(sobra);
+  Logger.log('Listo: pestañas creadas y permisos autorizados.');
+}
 
 function doGet() {
   return json_({ ok: true, app: 'gastos-viaje' });
@@ -20,7 +34,7 @@ function doPost(e) {
     const lock = LockService.getScriptLock();
     lock.waitLock(20000);
     try {
-      const ss = SpreadsheetApp.getActive();
+      const ss = SpreadsheetApp.openById(SHEET_ID);
       const hv = hoja_(ss, HOJA_VIAJES, ['tripId', 'json', 'updatedAt']);
       const hg = hoja_(ss, HOJA_GASTOS, ['tripId', 'id', 'json', 'updatedAt']);
 

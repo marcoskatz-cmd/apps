@@ -61,7 +61,7 @@
 'use strict';
 // ── Configuración ─────────────────────────────────────────────
 // URL del Web App de Apps Script (ver README). Vacía = funciona solo en este celular.
-const API_URL = 'https://script.google.com/macros/s/AKfycbyKLpMF1WeJe5X4UD1k2TBLU8hyMGlewpmMKuYWFPW-0GMkckH3Cpv8e5yaXpXix8QC/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbyMR59LmltIUGj6HjplaXPKolizjRWmY38M-I3pVGCIyMwXKTliMiHuC1fxwZZdKlGjVg/exec';
 const MONEDAS_SUGERIDAS = ['CNY', 'USD', 'ARS', 'EUR'];
 // ──────────────────────────────────────────────────────────────
 
@@ -150,6 +150,16 @@ function guardarTrip(t, cambios) {
   v.tripDirty = true; guardar(); render(); sync(t);
 }
 
+
+const AYUDA = `
+  <div class="card"><strong>1. Crear el viaje</strong><div class="muted">Uno solo lo crea: nombre, las personas y las monedas que van a usar.</div></div>
+  <div class="card"><strong>2. Pasar el link</strong><div class="muted">Pestaña <b>Viaje → Compartir link</b> y mandarlo al grupo por WhatsApp. Cada uno lo abre, elige quién es y listo. No hace falta crear cuenta.</div></div>
+  <div class="card"><strong>3. Instalarla antes de salir</strong><div class="muted">En el celular: menú del navegador → <b>Agregar a pantalla de inicio</b>. Así abre aunque no haya señal.</div></div>
+  <div class="card"><strong>4. Cargar un gasto</strong><div class="muted">Botón <b>＋ Gasto</b>: monto, moneda en la que se pagó, quién pagó y entre quiénes se divide (en partes iguales). Si algo quedó mal, tocás el gasto y lo corregís o borrás.</div></div>
+  <div class="card"><strong>5. Ver quién le debe a quién</strong><div class="muted">Pestaña <b>Saldos</b>. Cada moneda se arregla por separado: lo que se pagó en yuanes se devuelve en yuanes, lo de dólares en dólares. Nunca se convierte nada.</div></div>
+  <div class="card"><strong>6. Saldar</strong><div class="muted">Cuando alguien paga lo que debe, tocá <b>Ya pagó</b> al lado de esa línea. Queda registrado y el saldo baja.</div></div>
+  <div class="card"><strong>Sin señal</strong><div class="muted">Se puede cargar igual. Arriba aparece en ámbar "N sin subir"; se sube solo cuando vuelve la conexión.</div></div>`;
+
 // ── Vistas ────────────────────────────────────────────────────
 function render() {
   const t = tripActual();
@@ -170,6 +180,7 @@ function vistaInicio() {
         <div class="row"><strong>${esc(v.trip.name)}</strong><span class="muted">${vivos(v).filter(x => !x.settlement).length} gastos</span></div>
         <div class="muted">${v.trip.people.map(esc).join(' · ')}</div>
       </div>`).join('') : '<div class="vacio">Todavía no tenés viajes.<br>Creá uno, o abrí el link que te pasaron.</div>'}
+    <details class="card" ${lista.length ? '' : 'open'}><summary><strong>¿Cómo se usa?</strong></summary>${AYUDA}</details>
   </main>
   <button class="btn fab" onclick="modalNuevoViaje()">＋ Nuevo viaje</button>`;
 }
@@ -190,9 +201,9 @@ function vistaViaje(t) {
     <div class="sub">${estado}<span>Sos ${esc(v.me)}</span></div>
   </header>
   <nav class="tabs">
-    ${['gastos', 'saldos', 'viaje'].map(k => `<button class="${ui.tab === k ? 'on' : ''}" onclick="ui.tab='${k}';render()">${{ gastos: 'Gastos', saldos: 'Saldos', viaje: 'Viaje' }[k]}</button>`).join('')}
+    ${['gastos', 'saldos', 'viaje', 'ayuda'].map(k => `<button class="${ui.tab === k ? 'on' : ''}" onclick="ui.tab='${k}';render()">${{ gastos: 'Gastos', saldos: 'Saldos', viaje: 'Viaje', ayuda: 'Ayuda' }[k]}</button>`).join('')}
   </nav>
-  <main>${ui.tab === 'gastos' ? tabGastos(t) : ui.tab === 'saldos' ? tabSaldos(t) : tabViaje(t)}</main>
+  <main>${ui.tab === 'gastos' ? tabGastos(t) : ui.tab === 'saldos' ? tabSaldos(t) : ui.tab === 'ayuda' ? AYUDA : tabViaje(t)}</main>
   ${ui.tab === 'gastos' ? `<button class="btn fab" onclick="modalGasto('${t}')">＋ Gasto</button>` : ''}`;
 }
 

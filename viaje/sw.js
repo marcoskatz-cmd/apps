@@ -1,5 +1,5 @@
 /* Gastos de viaje — funciona sin señal. Los datos viven en localStorage; esto cachea la app. */
-const CACHE = 'gastos-viaje-v2';
+const CACHE = 'gastos-viaje-v3';
 const ASSETS = ['./', './index.html', './logic.js', './manifest.json', '../icon-192.png', '../icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener('activate', e => {
