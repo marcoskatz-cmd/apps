@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b3d63">
+<title>Gastos de viaje</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<style>
+  :root { --azul:#0b3d63; --azul2:#1565a8; --teal:#0f8b8d; --ambar:#e69500; --fondo:#f2f4f7; --txt:#1b2430; --gris:#6b7684; --borde:#d8dee6; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--fondo); color:var(--txt); padding-bottom:96px; }
+  header { background:var(--azul); color:#fff; padding:14px 16px calc(10px); padding-top:max(14px,env(safe-area-inset-top)); position:sticky; top:0; z-index:5; }
+  header h1 { margin:0; font-size:19px; display:flex; align-items:center; gap:8px; }
+  header .sub { font-size:13px; opacity:.85; margin-top:2px; display:flex; gap:10px; align-items:center; }
+  .back { background:none; border:0; color:#fff; font-size:22px; padding:0 6px 0 0; cursor:pointer; }
+  main { padding:12px; max-width:640px; margin:0 auto; }
+  .card { background:#fff; border:1px solid var(--borde); border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  .row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .muted { color:var(--gris); font-size:13px; }
+  .monto { font-weight:700; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  button.btn { border:0; border-radius:10px; padding:12px 16px; font-size:16px; font-weight:600; cursor:pointer; background:var(--azul2); color:#fff; }
+  button.btn.sec { background:#e3ebf3; color:var(--azul); }
+  button.btn.amb { background:var(--ambar); color:#fff; }
+  button.btn.chico { padding:7px 10px; font-size:14px; }
+  button.btn.full { width:100%; }
+  .fab { position:fixed; right:16px; bottom:max(18px,env(safe-area-inset-bottom)); border-radius:28px; padding:16px 22px; font-size:17px; box-shadow:0 4px 14px rgba(0,0,0,.25); z-index:6; }
+  .tabs { display:flex; background:#fff; border-bottom:1px solid var(--borde); position:sticky; top:58px; z-index:4; }
+  .tabs button { flex:1; border:0; background:none; padding:12px; font-size:15px; font-weight:600; color:var(--gris); border-bottom:3px solid transparent; cursor:pointer; }
+  .tabs button.on { color:var(--azul2); border-color:var(--azul2); }
+  label { display:block; font-size:13px; font-weight:600; color:var(--gris); margin:14px 0 6px; }
+  input, textarea { width:100%; font-size:17px; padding:11px 12px; border:1px solid var(--borde); border-radius:10px; background:#fff; color:var(--txt); font-family:inherit; }
+  input.grande { font-size:28px; font-weight:700; text-align:center; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { border:2px solid var(--borde); background:#fff; border-radius:20px; padding:8px 14px; font-size:15px; cursor:pointer; color:var(--txt); }
+  .chip.on { border-color:var(--azul2); background:var(--azul2); color:#fff; }
+  .chip.on.teal { border-color:var(--teal); background:var(--teal); }
+  .badge { font-size:12px; padding:2px 8px; border-radius:10px; background:rgba(255,255,255,.18); }
+  .badge.pend { background:var(--ambar); color:#fff; }
+  .moneda { font-size:13px; font-weight:700; color:var(--teal); letter-spacing:.5px; }
+  .tx { padding:10px 0; border-top:1px solid #eef1f5; }
+  .tx:first-of-type { border-top:0; }
+  .flecha { color:var(--gris); margin:0 4px; }
+  .aviso { background:#fff4dc; border:1px solid #f0c66a; color:#6b4a00; border-radius:10px; padding:10px 12px; font-size:14px; margin-bottom:10px; }
+  .vacio { text-align:center; color:var(--gris); padding:30px 10px; }
+  .modal { position:fixed; inset:0; background:rgba(10,20,30,.45); z-index:10; display:flex; align-items:flex-end; justify-content:center; }
+  .hoja { background:var(--fondo); width:100%; max-width:640px; max-height:92vh; overflow:auto; border-radius:16px 16px 0 0; padding:16px 16px max(20px,env(safe-area-inset-bottom)); }
+  .hoja h2 { margin:0 0 4px; font-size:18px; }
+  .acciones { display:flex; gap:8px; margin-top:18px; }
+  .acciones .btn { flex:1; }
+  .pos { color:var(--azul2); } .neg { color:var(--ambar); }
+  .toast { position:fixed; left:50%; bottom:90px; transform:translateX(-50%); background:#1b2430; color:#fff; padding:10px 16px; border-radius:20px; font-size:14px; z-index:20; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script src="logic.js"></script>
+<script>
+'use strict';
+// ── Configuración ─────────────────────────────────────────────
+// URL del Web App de Apps Script (ver README). Vacía = funciona solo en este celular.
+const API_URL = '';
+const MONEDAS_SUGERIDAS = ['CNY', 'USD', 'ARS', 'EUR'];
+// ──────────────────────────────────────────────────────────────
+
+const L = window.ViajeLogic;
+const KEY = 'gastosViaje:v1';
+let DB = cargar();
+let ui = { tab: 'gastos' };
+let syncando = {};
+
+function cargar() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
+function guardar() { localStorage.setItem(KEY, JSON.stringify(DB)); }
+function nuevoId() {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function $(s) { return document.querySelector(s); }
+function toast(msg) {
+  const d = document.createElement('div'); d.className = 'toast'; d.textContent = msg;
+  document.body.appendChild(d); setTimeout(() => d.remove(), 2200);
+}
+function tripActual() { const m = location.hash.match(/t=([A-Za-z0-9_-]+)/); return m ? m[1] : null; }
+function vivos(v) { return v.expenses.filter(x => !x.deleted); }
+function pendientes(v) { return (v.dirty || []).length + (v.tripDirty ? 1 : 0); }
+
+// ── Sincronización ────────────────────────────────────────────
+async function sync(t) {
+  const v = DB[t];
+  if (!API_URL || !v || syncando[t] || !navigator.onLine) return;
+  syncando[t] = true;
+  const enviados = (v.dirty || []).map(id => v.expenses.find(x => x.id === id)).filter(Boolean);
+  const tripEnviado = v.tripDirty ? v.trip : null;
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'sync', t, trip: tripEnviado, expenses: enviados })
+    });
+    const r = await res.json();
+    if (!r.ok) { if (r.error === 'viaje no encontrado' && !v.trip) v.error = 'No encontré ese viaje. Revisá el link.'; throw new Error(r.error); }
+    const w = DB[t];
+    // metadatos: unión de personas y monedas (nadie pierde lo que agregó)
+    if (w.trip && r.trip) {
+      const people = [...new Set([...r.trip.people, ...w.trip.people])];
+      const currencies = [...new Set([...r.trip.currencies, ...w.trip.currencies])];
+      const masNuevo = (w.trip.updatedAt || 0) > (r.trip.updatedAt || 0) ? w.trip : r.trip;
+      const unido = { ...masNuevo, people, currencies };
+      const cambio = people.length !== r.trip.people.length || currencies.length !== r.trip.currencies.length;
+      w.trip = unido;
+      w.tripDirty = cambio || (w.tripDirty && w.trip !== tripEnviado && (w.trip.updatedAt || 0) > (r.trip.updatedAt || 0));
+      if (cambio) w.trip.updatedAt = Date.now();
+    } else {
+      w.trip = r.trip; w.tripDirty = false;
+    }
+    w.expenses = L.mergeById(w.expenses, r.expenses);
+    w.dirty = (w.dirty || []).filter(id => {
+      const env = enviados.find(x => x.id === id), loc = w.expenses.find(x => x.id === id);
+      return !env || !loc || loc.updatedAt !== env.updatedAt;
+    });
+    w.lastSync = Date.now(); delete w.error;
+    guardar();
+  } catch (e) {
+    console.warn('sync', e);
+  } finally {
+    syncando[t] = false;
+    render();
+    if (DB[t] && pendientes(DB[t]) && navigator.onLine) setTimeout(() => sync(t), 4000);
+  }
+}
+window.addEventListener('online', () => { const t = tripActual(); if (t) sync(t); });
+document.addEventListener('visibilitychange', () => { const t = tripActual(); if (t && !document.hidden) sync(t); });
+setInterval(() => { const t = tripActual(); if (t && !document.hidden) sync(t); }, 30000);
+
+// ── Mutaciones ────────────────────────────────────────────────
+function guardarGasto(t, g) {
+  const v = DB[t];
+  g.updatedAt = Date.now();
+  const i = v.expenses.findIndex(x => x.id === g.id);
+  if (i >= 0) v.expenses[i] = g; else v.expenses.push(g);
+  v.dirty = [...new Set([...(v.dirty || []), g.id])];
+  if (!g.deleted && !g.settlement) v.ultimaMoneda = g.currency;
+  guardar(); render(); sync(t);
+}
+function guardarTrip(t, cambios) {
+  const v = DB[t];
+  v.trip = { ...v.trip, ...cambios, updatedAt: Date.now() };
+  v.tripDirty = true; guardar(); render(); sync(t);
+}
+
+// ── Vistas ────────────────────────────────────────────────────
+function render() {
+  const t = tripActual();
+  if (t && !DB[t]) { DB[t] = { trip: null, expenses: [], dirty: [] }; guardar(); sync(t); }
+  $('#app').innerHTML = t ? vistaViaje(t) : vistaInicio();
+}
+window.addEventListener('hashchange', () => { ui.tab = 'gastos'; render(); const t = tripActual(); if (t) sync(t); });
+
+function vistaInicio() {
+  const lista = Object.entries(DB).filter(([, v]) => v.trip)
+    .sort((a, b) => (b[1].trip.createdAt || 0) - (a[1].trip.createdAt || 0));
+  return `
+  <header><h1>✈️ Gastos de viaje</h1><div class="sub">Saldos separados por moneda, sin conversiones</div></header>
+  <main>
+    ${!API_URL ? '<div class="aviso">Modo local: todavía no hay servidor configurado, los gastos quedan solo en este celular.</div>' : ''}
+    ${lista.length ? lista.map(([id, v]) => `
+      <div class="card" onclick="location.hash='t=${id}'" style="cursor:pointer">
+        <div class="row"><strong>${esc(v.trip.name)}</strong><span class="muted">${vivos(v).filter(x => !x.settlement).length} gastos</span></div>
+        <div class="muted">${v.trip.people.map(esc).join(' · ')}</div>
+      </div>`).join('') : '<div class="vacio">Todavía no tenés viajes.<br>Creá uno, o abrí el link que te pasaron.</div>'}
+  </main>
+  <button class="btn fab" onclick="modalNuevoViaje()">＋ Nuevo viaje</button>`;
+}
+
+function vistaViaje(t) {
+  const v = DB[t];
+  if (!v.trip) {
+    return `<header><h1><button class="back" onclick="location.hash=''">‹</button>Cargando viaje…</h1></header>
+    <main>${v.error ? `<div class="aviso">${esc(v.error)}</div>` : !navigator.onLine ? '<div class="aviso">Sin conexión. Abrí el link de nuevo cuando tengas señal.</div>' : '<div class="vacio">Buscando el viaje…</div>'}</main>`;
+  }
+  if (!v.me) return vistaQuienSos(t);
+  const p = pendientes(v);
+  const estado = !API_URL ? '<span class="badge">solo local</span>'
+    : p ? `<span class="badge pend">${p} sin subir</span>` : '<span class="badge">✓ al día</span>';
+  return `
+  <header>
+    <h1><button class="back" onclick="location.hash=''">‹</button>${esc(v.trip.name)}</h1>
+    <div class="sub">${estado}<span>Sos ${esc(v.me)}</span></div>
+  </header>
+  <nav class="tabs">
+    ${['gastos', 'saldos', 'viaje'].map(k => `<button class="${ui.tab === k ? 'on' : ''}" onclick="ui.tab='${k}';render()">${{ gastos: 'Gastos', saldos: 'Saldos', viaje: 'Viaje' }[k]}</button>`).join('')}
+  </nav>
+  <main>${ui.tab === 'gastos' ? tabGastos(t) : ui.tab === 'saldos' ? tabSaldos(t) : tabViaje(t)}</main>
+  ${ui.tab === 'gastos' ? `<button class="btn fab" onclick="modalGasto('${t}')">＋ Gasto</button>` : ''}`;
+}
+
+function vistaQuienSos(t) {
+  const v = DB[t];
+  return `<header><h1><button class="back" onclick="location.hash=''">‹</button>${esc(v.trip.name)}</h1></header>
+  <main><div class="card"><h2 style="margin:0 0 10px;font-size:18px">¿Quién sos?</h2>
+  <div class="muted" style="margin-bottom:12px">Se usa para poner "pagué yo" por defecto. Se puede cambiar después.</div>
+  <div class="chips">${v.trip.people.map(n => `<button class="chip" onclick='elegirYo("${t}", ${JSON.stringify(n)})'>${esc(n)}</button>`).join('')}</div></div></main>`;
+}
+function elegirYo(t, n) { DB[t].me = n; guardar(); render(); }
+
+function tabGastos(t) {
+  const v = DB[t];
+  const g = vivos(v).sort((a, b) => (b.date || b.createdAt || 0) - (a.date || a.createdAt || 0));
+  if (!g.length) return '<div class="vacio">Sin gastos todavía.<br>Tocá <b>＋ Gasto</b> para cargar el primero.</div>';
+  const totales = {};
+  g.filter(x => !x.settlement).forEach(x => totales[x.currency] = (totales[x.currency] || 0) + x.amount);
+  return `<div class="card"><div class="muted">Gastado en total</div>
+    ${Object.entries(totales).map(([c, m]) => `<div class="row"><span class="moneda">${c}</span><span class="monto">${L.fromCents(m)}</span></div>`).join('')}</div>
+  ${g.map(x => `
+    <div class="card" onclick="modalGasto('${t}','${x.id}')" style="cursor:pointer">
+      <div class="row"><strong>${x.settlement ? '💸 ' : ''}${esc(x.desc || (x.settlement ? 'Pago' : 'Gasto'))}</strong>
+        <span class="monto">${L.fromCents(x.amount)} <span class="moneda">${x.currency}</span></span></div>
+      <div class="muted">${x.settlement ? `${esc(x.payer)} le pagó a ${esc(x.split[0])}`
+        : `Pagó ${esc(x.payer)} · ${x.split.length === v.trip.people.length ? 'entre todos' : 'entre ' + x.split.map(esc).join(', ')}`}
+        · ${new Date(x.date || x.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+        ${(v.dirty || []).includes(x.id) ? ' · <span class="neg">sin subir</span>' : ''}</div>
+    </div>`).join('')}`;
+}
+
+function tabSaldos(t) {
+  const v = DB[t];
+  const s = L.settleAll(vivos(v));
+  const b = L.balances(vivos(v));
+  const monedas = Object.keys(s);
+  if (!monedas.length) return '<div class="vacio">🎉 Todo saldado. Nadie le debe nada a nadie.</div>';
+  return monedas.map(c => `
+    <div class="card">
+      <div class="moneda" style="margin-bottom:6px">${c}</div>
+      ${s[c].map(tx => `
+        <div class="tx row">
+          <div><strong>${esc(tx.from)}</strong><span class="flecha">→</span><strong>${esc(tx.to)}</strong>
+            <div class="monto" style="font-size:18px">${L.fromCents(tx.amount)} ${c}</div></div>
+          <button class="btn chico sec" onclick='registrarPago("${t}", ${JSON.stringify(tx.from)}, ${JSON.stringify(tx.to)}, ${tx.amount}, "${c}")'>Ya pagó</button>
+        </div>`).join('')}
+      <details style="margin-top:8px"><summary class="muted">Saldo de cada uno en ${c}</summary>
+        ${Object.entries(b[c]).filter(([, x]) => x).sort((a, b) => b[1] - a[1]).map(([p, x]) =>
+          `<div class="row muted"><span>${esc(p)}</span><span class="${x > 0 ? 'pos' : 'neg'}">${x > 0 ? 'le deben ' : 'debe '}${L.fromCents(Math.abs(x))}</span></div>`).join('')}
+      </details>
+    </div>`).join('') +
+    '<div class="muted" style="text-align:center;padding:6px">Cada moneda se arregla por separado: nada se convierte.</div>';
+}
+
+function registrarPago(t, from, to, amount, currency) {
+  if (!confirm(`¿Registrar que ${from} le pagó ${L.fromCents(amount)} ${currency} a ${to}?`)) return;
+  guardarGasto(t, { id: nuevoId(), desc: 'Pago', amount, currency, payer: from, split: [to], settlement: true, createdAt: Date.now(), date: Date.now(), by: DB[t].me });
+  toast('Pago registrado');
+}
+
+function tabViaje(t) {
+  const v = DB[t];
+  return `
+  <div class="card"><div class="muted">Compartí este link con el grupo. Quien lo tenga puede ver y cargar gastos.</div>
+    <button class="btn full" style="margin-top:10px" onclick="compartir('${t}')">📤 Compartir link del viaje</button></div>
+  <div class="card"><strong>Personas</strong>
+    <div class="chips" style="margin-top:8px">${v.trip.people.map(n => `<span class="chip">${esc(n)}</span>`).join('')}</div>
+    <div class="row" style="margin-top:10px"><input id="np" placeholder="Agregar persona"><button class="btn chico" onclick="agregarPersona('${t}')">Agregar</button></div></div>
+  <div class="card"><strong>Monedas</strong>
+    <div class="chips" style="margin-top:8px">${v.trip.currencies.map(c => `<span class="chip">${c}</span>`).join('')}</div>
+    <div class="row" style="margin-top:10px"><input id="nm" placeholder="Ej: JPY" maxlength="5" style="text-transform:uppercase"><button class="btn chico" onclick="agregarMoneda('${t}')">Agregar</button></div></div>
+  <div class="card"><strong>Este celular</strong><div class="muted">Sos ${esc(v.me)}.</div>
+    <button class="btn sec chico" style="margin-top:8px" onclick="DB['${t}'].me=null;guardar();render()">Cambiar quién soy</button>
+    ${API_URL ? `<button class="btn sec chico" style="margin-top:8px" onclick="sync('${t}');toast('Sincronizando…')">Sincronizar ahora</button>` : ''}
+    <button class="btn sec chico" style="margin-top:8px" onclick="exportar('${t}')">Copiar gastos (para planilla)</button>
+    <div class="muted" style="margin-top:6px">${v.lastSync ? 'Última sincronización: ' + new Date(v.lastSync).toLocaleString('es-AR') : ''}</div></div>`;
+}
+function agregarPersona(t) {
+  const n = $('#np').value.trim(); if (!n) return;
+  if (DB[t].trip.people.includes(n)) return toast('Ya está');
+  guardarTrip(t, { people: [...DB[t].trip.people, n] });
+}
+function agregarMoneda(t) {
+  const c = $('#nm').value.trim().toUpperCase(); if (!/^[A-Z]{2,5}$/.test(c)) return toast('Código de 3 letras, ej. JPY');
+  if (DB[t].trip.currencies.includes(c)) return toast('Ya está');
+  guardarTrip(t, { currencies: [...DB[t].trip.currencies, c] });
+}
+async function compartir(t) {
+  const url = location.href.split('#')[0] + '#t=' + t;
+  const txt = `Gastos del viaje "${DB[t].trip.name}": ${url}`;
+  if (navigator.share) { try { await navigator.share({ title: DB[t].trip.name, text: txt, url }); return; } catch (e) { } }
+  try { await navigator.clipboard.writeText(url); toast('Link copiado'); } catch (e) { prompt('Copiá el link:', url); }
+}
+async function exportar(t) {
+  const filas = [['Fecha', 'Descripción', 'Monto', 'Moneda', 'Pagó', 'Entre']].concat(
+    vivos(DB[t]).map(x => [new Date(x.date || x.createdAt).toLocaleDateString('es-AR'), x.desc, L.fromCents(x.amount), x.currency, x.payer, x.split.join(', ')]));
+  const tsv = filas.map(f => f.join('\t')).join('\n');
+  try { await navigator.clipboard.writeText(tsv); toast('Copiado: pegalo en una planilla'); } catch (e) { prompt('Copiá:', tsv); }
+}
+
+// ── Modales ───────────────────────────────────────────────────
+function abrirModal(html) {
+  cerrarModal();
+  const m = document.createElement('div'); m.className = 'modal'; m.id = 'modal';
+  m.innerHTML = `<div class="hoja">${html}</div>`;
+  m.addEventListener('click', e => { if (e.target === m) cerrarModal(); });
+  document.body.appendChild(m);
+}
+function cerrarModal() { const m = $('#modal'); if (m) m.remove(); }
+
+function modalNuevoViaje() {
+  abrirModal(`<h2>Nuevo viaje</h2>
+    <label>Nombre</label><input id="vn" placeholder="China 2026">
+    <label>Personas (una por línea; vos primero)</label><textarea id="vp" rows="4" placeholder="Marcos&#10;Juan&#10;Pedro&#10;Lucas"></textarea>
+    <label>Monedas</label><div class="chips" id="vm">${MONEDAS_SUGERIDAS.map((c, i) => `<button class="chip ${i < 3 ? 'on' : ''}" data-c="${c}" onclick="this.classList.toggle('on')">${c}</button>`).join('')}</div>
+    <div class="acciones"><button class="btn sec" onclick="cerrarModal()">Cancelar</button><button class="btn" onclick="crearViaje()">Crear</button></div>`);
+  $('#vn').focus();
+}
+function crearViaje() {
+  const name = $('#vn').value.trim();
+  const people = [...new Set($('#vp').value.split(/[\n,]/).map(s => s.trim()).filter(Boolean))];
+  const currencies = [...document.querySelectorAll('#vm .chip.on')].map(b => b.dataset.c);
+  if (!name) return toast('Poné un nombre');
+  if (people.length < 2) return toast('Hacen falta al menos 2 personas');
+  if (!currencies.length) return toast('Elegí al menos una moneda');
+  const t = nuevoId();
+  DB[t] = { trip: { name, people, currencies, createdAt: Date.now(), updatedAt: Date.now() }, tripDirty: true, expenses: [], dirty: [], me: people[0] };
+  guardar(); cerrarModal(); location.hash = 't=' + t;
+}
+
+let form = null;
+function modalGasto(t, id) {
+  const v = DB[t], g = id ? v.expenses.find(x => x.id === id) : null;
+  form = g ? { ...g, split: [...g.split] } : {
+    id: nuevoId(), desc: '', amount: 0, currency: v.ultimaMoneda || v.trip.currencies[0],
+    payer: v.me, split: [...v.trip.people], createdAt: Date.now(), date: Date.now(), by: v.me
+  };
+  form.t = t;
+  const chips = (lista, sel, fn, cls = '') => lista.map(x =>
+    `<button class="chip ${cls} ${sel(x) ? 'on' : ''}" onclick='${fn}(${JSON.stringify(x)}, this)'>${esc(x)}</button>`).join('');
+  abrirModal(`<h2>${g ? (g.settlement ? 'Pago' : 'Editar gasto') : 'Nuevo gasto'}</h2>
+    <label>Monto</label><input id="gm" class="grande" inputmode="decimal" placeholder="0" value="${g ? L.fromCents(g.amount).replace(/\./g, '') : ''}">
+    <label>Moneda</label><div class="chips" id="gc">${chips(v.trip.currencies, c => c === form.currency, 'fMoneda', 'teal')}</div>
+    <label>Descripción</label><input id="gd" placeholder="Cena, taxi, entradas…" value="${esc(form.desc)}">
+    <label>Pagó</label><div class="chips" id="gp">${chips(v.trip.people, p => p === form.payer, 'fPagador')}</div>
+    <label>${form.settlement ? 'Recibió' : 'Entre quiénes (partes iguales)'}</label><div class="chips" id="gs">${chips(v.trip.people, p => form.split.includes(p), 'fSplit')}</div>
+    <div class="acciones">
+      ${g ? `<button class="btn amb" onclick="borrarGasto()">Borrar</button>` : `<button class="btn sec" onclick="cerrarModal()">Cancelar</button>`}
+      <button class="btn" onclick="enviarGasto()">Guardar</button></div>`);
+  if (!g) $('#gm').focus();
+}
+function fMoneda(c, el) { form.currency = c; document.querySelectorAll('#gc .chip').forEach(b => b.classList.toggle('on', b === el)); }
+function fPagador(p, el) { form.payer = p; document.querySelectorAll('#gp .chip').forEach(b => b.classList.toggle('on', b === el)); }
+function fSplit(p, el) {
+  if (form.settlement) { form.split = [p]; document.querySelectorAll('#gs .chip').forEach(b => b.classList.toggle('on', b === el)); return; }
+  form.split = form.split.includes(p) ? form.split.filter(x => x !== p) : [...form.split, p];
+  el.classList.toggle('on');
+}
+function enviarGasto() {
+  const amount = L.toCents($('#gm').value);
+  if (!(amount > 0)) return toast('Poné un monto válido');
+  if (!form.split.length) return toast('Elegí entre quiénes se divide');
+  const { t, ...g } = form;
+  g.amount = amount; g.desc = $('#gd').value.trim();
+  g.split = DB[t].trip.people.filter(p => g.split.includes(p));
+  guardarGasto(t, g); cerrarModal(); toast('Guardado');
+}
+function borrarGasto() {
+  if (!confirm('¿Borrar este gasto?')) return;
+  const { t, ...g } = form; g.deleted = true;
+  guardarGasto(t, g); cerrarModal(); toast('Borrado');
+}
+
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+render();
+if (tripActual()) sync(tripActual());
+</script>
+</body>
+</html>
