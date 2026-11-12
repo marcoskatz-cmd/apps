@@ -66,6 +66,8 @@ const MONEDAS_SUGERIDAS = ['CNY', 'USD', 'ARS', 'EUR'];
 // ──────────────────────────────────────────────────────────────
 
 const L = window.ViajeLogic;
+const SIMBOLO = { ARS: '$', USD: 'US$', CNY: '¥', JPY: '¥', EUR: '€', BRL: 'R$', CLP: 'CLP$', UYU: '$U', GBP: '£' };
+function plata(c, cur) { return (SIMBOLO[cur] ? SIMBOLO[cur] + ' ' : '') + L.fromCents(c); }
 const KEY = 'gastosViaje:v1';
 let DB = cargar();
 let ui = { tab: 'gastos' };
@@ -223,11 +225,11 @@ function tabGastos(t) {
   const totales = {};
   g.filter(x => !x.settlement).forEach(x => totales[x.currency] = (totales[x.currency] || 0) + x.amount);
   return `<div class="card"><div class="muted">Gastado en total</div>
-    ${Object.entries(totales).map(([c, m]) => `<div class="row"><span class="moneda">${c}</span><span class="monto">${L.fromCents(m)}</span></div>`).join('')}</div>
+    ${Object.entries(totales).map(([c, m]) => `<div class="row"><span class="moneda">${c}</span><span class="monto">${plata(m, c)}</span></div>`).join('')}</div>
   ${g.map(x => `
     <div class="card" onclick="modalGasto('${t}','${x.id}')" style="cursor:pointer">
       <div class="row"><strong>${x.settlement ? '💸 ' : ''}${esc(x.desc || (x.settlement ? 'Pago' : 'Gasto'))}</strong>
-        <span class="monto">${L.fromCents(x.amount)} <span class="moneda">${x.currency}</span></span></div>
+        <span class="monto">${plata(x.amount, x.currency)} <span class="moneda">${x.currency}</span></span></div>
       <div class="muted">${x.settlement ? `${esc(x.payer)} le pagó a ${esc(x.split[0])}`
         : `Pagó ${esc(x.payer)} · ${x.split.length === v.trip.people.length ? 'entre todos' : 'entre ' + x.split.map(esc).join(', ')}`}
         · ${new Date(x.date || x.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
@@ -247,19 +249,19 @@ function tabSaldos(t) {
       ${s[c].map(tx => `
         <div class="tx row">
           <div><strong>${esc(tx.from)}</strong><span class="flecha">→</span><strong>${esc(tx.to)}</strong>
-            <div class="monto" style="font-size:18px">${L.fromCents(tx.amount)} ${c}</div></div>
+            <div class="monto" style="font-size:18px">${plata(tx.amount, c)} <span class="moneda">${c}</span></div></div>
           <button class="btn chico sec" onclick='registrarPago("${t}", ${JSON.stringify(tx.from)}, ${JSON.stringify(tx.to)}, ${tx.amount}, "${c}")'>Ya pagó</button>
         </div>`).join('')}
       <details style="margin-top:8px"><summary class="muted">Saldo de cada uno en ${c}</summary>
         ${Object.entries(b[c]).filter(([, x]) => x).sort((a, b) => b[1] - a[1]).map(([p, x]) =>
-          `<div class="row muted"><span>${esc(p)}</span><span class="${x > 0 ? 'pos' : 'neg'}">${x > 0 ? 'le deben ' : 'debe '}${L.fromCents(Math.abs(x))}</span></div>`).join('')}
+          `<div class="row muted"><span>${esc(p)}</span><span class="${x > 0 ? 'pos' : 'neg'}">${x > 0 ? 'le deben ' : 'debe '}${plata(Math.abs(x), c)}</span></div>`).join('')}
       </details>
     </div>`).join('') +
     '<div class="muted" style="text-align:center;padding:6px">Cada moneda se arregla por separado: nada se convierte.</div>';
 }
 
 function registrarPago(t, from, to, amount, currency) {
-  if (!confirm(`¿Registrar que ${from} le pagó ${L.fromCents(amount)} ${currency} a ${to}?`)) return;
+  if (!confirm(`¿Registrar que ${from} le pagó ${plata(amount, currency)} ${currency} a ${to}?`)) return;
   guardarGasto(t, { id: nuevoId(), desc: 'Pago', amount, currency, payer: from, split: [to], settlement: true, createdAt: Date.now(), date: Date.now(), by: DB[t].me });
   toast('Pago registrado');
 }
@@ -345,7 +347,7 @@ function modalGasto(t, id) {
   const chips = (lista, sel, fn, cls = '') => lista.map(x =>
     `<button class="chip ${cls} ${sel(x) ? 'on' : ''}" onclick='${fn}(${JSON.stringify(x)}, this)'>${esc(x)}</button>`).join('');
   abrirModal(`<h2>${g ? (g.settlement ? 'Pago' : 'Editar gasto') : 'Nuevo gasto'}</h2>
-    <label>Monto</label><input id="gm" class="grande" inputmode="decimal" placeholder="0" value="${g ? L.fromCents(g.amount).replace(/\./g, '') : ''}">
+    <label>Monto</label><div style="position:relative"><span id="gsim" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:24px;font-weight:700;color:var(--teal)">${SIMBOLO[form.currency] || ''}</span><input id="gm" class="grande" inputmode="decimal" placeholder="0" value="${g ? L.fromCents(g.amount).replace(/\./g, '') : ''}"></div>
     <label>Moneda</label><div class="chips" id="gc">${chips(v.trip.currencies, c => c === form.currency, 'fMoneda', 'teal')}</div>
     <label>Descripción</label><input id="gd" placeholder="Cena, taxi, entradas…" value="${esc(form.desc)}">
     <label>Pagó</label><div class="chips" id="gp">${chips(v.trip.people, p => p === form.payer, 'fPagador')}</div>
@@ -355,7 +357,7 @@ function modalGasto(t, id) {
       <button class="btn" onclick="enviarGasto()">Guardar</button></div>`);
   if (!g) $('#gm').focus();
 }
-function fMoneda(c, el) { form.currency = c; document.querySelectorAll('#gc .chip').forEach(b => b.classList.toggle('on', b === el)); }
+function fMoneda(c, el) { form.currency = c; $('#gsim').textContent = SIMBOLO[c] || ''; document.querySelectorAll('#gc .chip').forEach(b => b.classList.toggle('on', b === el)); }
 function fPagador(p, el) { form.payer = p; document.querySelectorAll('#gp .chip').forEach(b => b.classList.toggle('on', b === el)); }
 function fSplit(p, el) {
   if (form.settlement) { form.split = [p]; document.querySelectorAll('#gs .chip').forEach(b => b.classList.toggle('on', b === el)); return; }
