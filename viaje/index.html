@@ -51,6 +51,12 @@
   .acciones { display:flex; gap:8px; margin-top:18px; }
   .acciones .btn { flex:1; }
   .pos { color:var(--azul2); } .neg { color:var(--ambar); }
+  .tabla { width:100%; border-collapse:collapse; font-size:14px; font-variant-numeric:tabular-nums; }
+  .tabla th { text-align:right; font-weight:600; color:var(--gris); font-size:12px; padding:4px 2px; }
+  .tabla th:first-child, .tabla td:first-child { text-align:left; }
+  .tabla td { text-align:right; padding:7px 2px; border-top:1px solid #eef1f5; white-space:nowrap; }
+  .tasa { display:flex; align-items:center; gap:8px; margin-top:8px; font-weight:600; }
+  .tasa input { width:130px; text-align:right; }
   .toast { position:fixed; left:50%; bottom:90px; transform:translateX(-50%); background:#1b2430; color:#fff; padding:10px 16px; border-radius:20px; font-size:14px; z-index:20; }
 </style>
 </head>
@@ -67,7 +73,7 @@ const MONEDAS_SUGERIDAS = ['CNY', 'USD', 'ARS', 'EUR'];
 
 const L = window.ViajeLogic;
 const SIMBOLO = { ARS: '$', USD: 'US$', CNY: '¥', JPY: '¥', EUR: '€', BRL: 'R$', CLP: 'CLP$', UYU: '$U', GBP: '£' };
-function plata(c, cur) { return (SIMBOLO[cur] ? SIMBOLO[cur] + ' ' : '') + L.fromCents(c); }
+function plata(c, cur) { return (c < 0 ? '−' : '') + (SIMBOLO[cur] ? SIMBOLO[cur] + ' ' : '') + L.fromCents(Math.abs(c)); }
 const KEY = 'gastosViaje:v1';
 let DB = cargar();
 let ui = { tab: 'gastos' };
@@ -143,7 +149,7 @@ function guardarGasto(t, g) {
   const i = v.expenses.findIndex(x => x.id === g.id);
   if (i >= 0) v.expenses[i] = g; else v.expenses.push(g);
   v.dirty = [...new Set([...(v.dirty || []), g.id])];
-  if (!g.deleted && !g.settlement) v.ultimaMoneda = g.currency;
+  if (!g.deleted && !g.settlement && g.type !== 'fx') v.ultimaMoneda = g.currency;
   guardar(); render(); sync(t);
 }
 function guardarTrip(t, cambios) {
@@ -158,7 +164,8 @@ const AYUDA = `
   <div class="card"><strong>2. Pasar el link</strong><div class="muted">Pestaña <b>Viaje → Compartir link</b> y mandarlo al grupo por WhatsApp. Cada uno lo abre, elige quién es y listo. No hace falta crear cuenta.</div></div>
   <div class="card"><strong>3. Instalarla antes de salir</strong><div class="muted">En el celular: menú del navegador → <b>Agregar a pantalla de inicio</b>. Así abre aunque no haya señal.</div></div>
   <div class="card"><strong>4. Cargar un gasto</strong><div class="muted">Botón <b>＋ Gasto</b>: monto, moneda en la que se pagó, quién pagó y entre quiénes se divide (en partes iguales). Si algo quedó mal, tocás el gasto y lo corregís o borrás.</div></div>
-  <div class="card"><strong>5. Ver quién le debe a quién</strong><div class="muted">Pestaña <b>Saldos</b>. Cada moneda se arregla por separado: lo que se pagó en yuanes se devuelve en yuanes, lo de dólares en dólares. Nunca se convierte nada.</div></div>
+  <div class="card"><strong>5. Ver quién le debe a quién</strong><div class="muted">Pestaña <b>Saldos</b>: arriba, <b>Cómo saldar</b> con la menor cantidad de pagos posible; abajo, el resumen de cuánto pagó cada uno, cuánto le tocaba y su saldo. Cada moneda se arregla por separado: lo de yuanes en yuanes, lo de dólares en dólares.</div></div>
+  <div class="card"><strong>Convertir (opcional)</strong><div class="muted">Al final del viaje, si prefieren arreglar todo en una sola moneda: Saldos → <b>Convertir todo a una moneda</b>, poné el tipo de cambio y mirá el resultado antes de confirmar. Así quedan menos pagos. Se puede deshacer.</div></div>
   <div class="card"><strong>6. Saldar</strong><div class="muted">Cuando alguien paga lo que debe, tocá <b>Ya pagó</b> al lado de esa línea. Queda registrado y el saldo baja.</div></div>
   <div class="card"><strong>Sin señal</strong><div class="muted">Se puede cargar igual. Arriba aparece en ámbar "N sin subir"; se sube solo cuando vuelve la conexión.</div></div>`;
 
@@ -179,7 +186,7 @@ function vistaInicio() {
     ${!API_URL ? '<div class="aviso">Modo local: todavía no hay servidor configurado, los gastos quedan solo en este celular.</div>' : ''}
     ${lista.length ? lista.map(([id, v]) => `
       <div class="card" onclick="location.hash='t=${id}'" style="cursor:pointer">
-        <div class="row"><strong>${esc(v.trip.name)}</strong><span class="muted">${vivos(v).filter(x => !x.settlement).length} gastos</span></div>
+        <div class="row"><strong>${esc(v.trip.name)}</strong><span class="muted">${vivos(v).filter(x => !x.settlement && x.type !== 'fx').length} gastos</span></div>
         <div class="muted">${v.trip.people.map(esc).join(' · ')}</div>
       </div>`).join('') : '<div class="vacio">Todavía no tenés viajes.<br>Creá uno, o abrí el link que te pasaron.</div>'}
     <details class="card" ${lista.length ? '' : 'open'}><summary><strong>¿Cómo se usa?</strong></summary>${AYUDA}</details>
@@ -223,10 +230,14 @@ function tabGastos(t) {
   const g = vivos(v).sort((a, b) => (b.date || b.createdAt || 0) - (a.date || a.createdAt || 0));
   if (!g.length) return '<div class="vacio">Sin gastos todavía.<br>Tocá <b>＋ Gasto</b> para cargar el primero.</div>';
   const totales = {};
-  g.filter(x => !x.settlement).forEach(x => totales[x.currency] = (totales[x.currency] || 0) + x.amount);
+  g.filter(x => !x.settlement && x.type !== 'fx').forEach(x => totales[x.currency] = (totales[x.currency] || 0) + x.amount);
   return `<div class="card"><div class="muted">Gastado en total</div>
     ${Object.entries(totales).map(([c, m]) => `<div class="row"><span class="moneda">${c}</span><span class="monto">${plata(m, c)}</span></div>`).join('')}</div>
-  ${g.map(x => `
+  ${g.map(x => x.type === 'fx' ? `
+    <div class="card" onclick="deshacerFx('${t}','${x.id}')" style="cursor:pointer">
+      <div class="row"><strong>🔁 Conversión ${x.from} → ${x.to}</strong><span class="monto">${plata(100, x.from).replace(',00', '')} = ${plata(Math.round(x.rate * 100), x.to)}</span></div>
+      <div class="muted">Los saldos en ${x.from} pasaron a ${x.to} · tocá para deshacer</div>
+    </div>` : `
     <div class="card" onclick="modalGasto('${t}','${x.id}')" style="cursor:pointer">
       <div class="row"><strong>${x.settlement ? '💸 ' : ''}${esc(x.desc || (x.settlement ? 'Pago' : 'Gasto'))}</strong>
         <span class="monto">${plata(x.amount, x.currency)} <span class="moneda">${x.currency}</span></span></div>
@@ -238,26 +249,108 @@ function tabGastos(t) {
 }
 
 function tabSaldos(t) {
-  const v = DB[t];
-  const s = L.settleAll(vivos(v));
-  const b = L.balances(vivos(v));
+  const v = DB[t], ex = vivos(v);
+  const s = L.settleAll(ex), res = L.summary(ex), b = L.balances(ex);
   const monedas = Object.keys(s);
-  if (!monedas.length) return '<div class="vacio">🎉 Todo saldado. Nadie le debe nada a nadie.</div>';
-  return monedas.map(c => `
-    <div class="card">
-      <div class="moneda" style="margin-bottom:6px">${c}</div>
-      ${s[c].map(tx => `
-        <div class="tx row">
-          <div><strong>${esc(tx.from)}</strong><span class="flecha">→</span><strong>${esc(tx.to)}</strong>
-            <div class="monto" style="font-size:18px">${plata(tx.amount, c)} <span class="moneda">${c}</span></div></div>
-          <button class="btn chico sec" onclick='registrarPago("${t}", ${JSON.stringify(tx.from)}, ${JSON.stringify(tx.to)}, ${tx.amount}, "${c}")'>Ya pagó</button>
-        </div>`).join('')}
-      <details style="margin-top:8px"><summary class="muted">Saldo de cada uno en ${c}</summary>
-        ${Object.entries(b[c]).filter(([, x]) => x).sort((a, b) => b[1] - a[1]).map(([p, x]) =>
-          `<div class="row muted"><span>${esc(p)}</span><span class="${x > 0 ? 'pos' : 'neg'}">${x > 0 ? 'le deben ' : 'debe '}${plata(Math.abs(x), c)}</span></div>`).join('')}
-      </details>
-    </div>`).join('') +
-    '<div class="muted" style="text-align:center;padding:6px">Cada moneda se arregla por separado: nada se convierte.</div>';
+  const nTx = monedas.reduce((n, c) => n + s[c].length, 0);
+  const conSaldo = Object.keys(b).filter(c => Object.values(b[c]).some(x => x));
+  const fx = ex.filter(x => x.type === 'fx');
+  let h = '';
+  // 1. Cómo saldar
+  if (!monedas.length) h += '<div class="card vacio" style="padding:20px">🎉 Todo saldado. Nadie le debe nada a nadie.</div>';
+  else h += `<div class="card"><div class="row"><strong>Cómo saldar</strong><span class="muted">${nTx} ${nTx === 1 ? 'transferencia' : 'transferencias'}</span></div>
+    <div class="muted" style="margin-bottom:4px">La menor cantidad de pagos posible. Cuando alguien paga, tocá "Ya pagó".</div>
+    ${monedas.map(c => `<div class="moneda" style="margin-top:10px">${c}</div>` + s[c].map(tx => `
+      <div class="tx row">
+        <div><strong>${esc(tx.from)}</strong><span class="flecha">→</span><strong>${esc(tx.to)}</strong>
+          <div class="monto" style="font-size:18px">${plata(tx.amount, c)} <span class="moneda">${c}</span></div></div>
+        <button class="btn chico sec" onclick='registrarPago("${t}", ${JSON.stringify(tx.from)}, ${JSON.stringify(tx.to)}, ${tx.amount}, "${c}")'>Ya pagó</button>
+      </div>`).join('')).join('')}</div>`;
+  // 2. Convertir (opcional)
+  if (fx.length) h += `<div class="card"><strong>Conversiones aplicadas</strong>${fx.map(x => `
+      <div class="tx row"><span>${x.from} → ${x.to}: ${plata(100, x.from).replace(',00', '')} = ${plata(Math.round(x.rate * 100), x.to)}</span>
+      <button class="btn chico sec" onclick="deshacerFx('${t}','${x.id}')">Deshacer</button></div>`).join('')}</div>`;
+  if (conSaldo.length > 1) h += `<button class="btn sec full" style="margin-bottom:10px" onclick="modalConvertir('${t}')">🔁 Convertir todo a una moneda (opcional)</button>`;
+  // 3. Resumen por persona
+  const curs = Object.keys(res).sort();
+  if (curs.length) h += `<div class="card"><strong>Resumen por persona</strong>
+    ${curs.map(c => {
+      const filas = v.trip.people.filter(p => res[c][p]).map(p => {
+        const r = res[c][p];
+        return `<tr><td>${esc(p)}</td><td>${r.pagado ? plata(r.pagado, c) : '—'}</td><td>${plata(r.parte, c)}</td>
+          <td class="${r.saldo > 0 ? 'pos' : r.saldo < 0 ? 'neg' : ''}"><b>${r.saldo > 0 ? '+' : ''}${plata(r.saldo, c)}</b></td></tr>`;
+      }).join('');
+      const extra = Object.values(res[c]).some(r => r.pagos || r.convertido);
+      return `<div class="moneda" style="margin-top:12px">${c}</div>
+        <table class="tabla"><tr><th></th><th>Pagó</th><th>Le tocaba</th><th>Saldo</th></tr>${filas}</table>
+        ${extra ? '<div class="muted" style="margin-top:4px">El saldo ya descuenta los pagos entre ustedes y las conversiones.</div>' : ''}`;
+    }).join('')}
+    <div class="muted" style="margin-top:10px"><span class="pos">+ le deben</span> · <span class="neg">− debe</span></div></div>`;
+  return h;
+}
+
+// ── Conversión opcional ──────────────────────────────────────
+let conv = null;
+function modalConvertir(t) {
+  const v = DB[t], b = L.balances(vivos(v));
+  const curs = Object.keys(b).filter(c => Object.values(b[c]).some(x => x));
+  const destino = v.trip.convDestino && curs.includes(v.trip.convDestino) ? v.trip.convDestino : (curs.includes('ARS') ? 'ARS' : curs[0]);
+  conv = { t, curs, to: destino, rates: { ...(v.trip.cambios || {}) } };
+  abrirModal(`<h2>Convertir todo a una moneda</h2>
+    <div class="muted">Opcional. Los saldos de las otras monedas pasan a la elegida con el tipo de cambio que pongas, y todo se arregla en esa moneda. Se puede deshacer.</div>
+    <label>Pasar todo a</label><div class="chips" id="cdest">${curs.map(c => `<button class="chip teal ${c === destino ? 'on' : ''}" onclick="convDestino('${c}', this)">${c}</button>`).join('')}</div>
+    <label>Tipo de cambio</label><div id="ctasas"></div>
+    <label>Resultado</label><div id="cprev" class="card"></div>
+    <div class="acciones"><button class="btn sec" onclick="cerrarModal()">Cancelar</button><button class="btn" id="cok" onclick="confirmarConversion()">Convertir</button></div>`);
+  dibujarTasas();
+}
+function convDestino(c, el) {
+  conv.to = c; document.querySelectorAll('#cdest .chip').forEach(x => x.classList.toggle('on', x === el)); dibujarTasas();
+}
+function claveTasa(from, to) { return from + '>' + to; }
+function dibujarTasas() {
+  $('#ctasas').innerHTML = conv.curs.filter(c => c !== conv.to).map(c => {
+    const k = claveTasa(c, conv.to), val = conv.rates[k] ? String(conv.rates[k]).replace('.', ',') : '';
+    return `<div class="tasa">${plata(100, c).replace(',00', '')} =<input inputmode="decimal" data-k="${k}" value="${val}" placeholder="0" oninput="conv.rates[this.dataset.k]=L.parseNum(this.value);previewConv()"> ${conv.to}</div>`;
+  }).join('');
+  previewConv();
+}
+function fxPropuestas() {
+  const v = DB[conv.t], ex = vivos(v), b = L.balances(ex), out = [];
+  let n = Date.now();
+  for (const c of conv.curs) {
+    if (c === conv.to) continue;
+    const rate = conv.rates[claveTasa(c, conv.to)];
+    if (!(rate > 0)) return null;
+    const amounts = {};
+    for (const [p, x] of Object.entries(b[c] || {})) if (x) amounts[p] = x;
+    out.push({ id: nuevoId(), type: 'fx', from: c, to: conv.to, rate, amounts, conv: L.convertBalances(amounts, rate),
+      currency: conv.to, amount: 0, createdAt: n++, by: v.me });
+  }
+  return out;
+}
+function previewConv() {
+  const fx = fxPropuestas();
+  if (!fx) { $('#cprev').innerHTML = '<div class="muted">Completá el tipo de cambio de cada moneda.</div>'; $('#cok').style.display = 'none'; return; }
+  $('#cok').style.display = '';
+  const s = L.settleAll([...vivos(DB[conv.t]), ...fx]);
+  const txs = Object.entries(s).flatMap(([c, l]) => l.map(x => ({ ...x, c })));
+  $('#cprev').innerHTML = txs.length ? `<div class="muted">${txs.length} ${txs.length === 1 ? 'transferencia' : 'transferencias'}:</div>` + txs.map(x =>
+    `<div class="row" style="margin-top:6px"><span><b>${esc(x.from)}</b> → <b>${esc(x.to)}</b></span><span class="monto">${plata(x.amount, x.c)} <span class="moneda">${x.c}</span></span></div>`).join('')
+    : '<div class="muted">Queda todo saldado.</div>';
+}
+function confirmarConversion() {
+  const fx = fxPropuestas(); if (!fx) return;
+  const t = conv.t, v = DB[t];
+  fx.forEach(g => { g.updatedAt = Date.now(); v.expenses.push(g); v.dirty = [...new Set([...(v.dirty || []), g.id])]; });
+  v.trip = { ...v.trip, cambios: { ...(v.trip.cambios || {}), ...conv.rates }, convDestino: conv.to, updatedAt: Date.now() };
+  v.tripDirty = true;
+  guardar(); cerrarModal(); render(); sync(t); toast('Convertido a ' + conv.to);
+}
+function deshacerFx(t, id) {
+  const g = DB[t].expenses.find(x => x.id === id);
+  if (!g || !confirm(`¿Deshacer la conversión ${g.from} → ${g.to}? Los saldos vuelven a estar en ${g.from}.`)) return;
+  guardarGasto(t, { ...g, deleted: true }); toast('Conversión deshecha');
 }
 
 function registrarPago(t, from, to, amount, currency) {
@@ -301,7 +394,7 @@ async function compartir(t) {
 }
 async function exportar(t) {
   const filas = [['Fecha', 'Descripción', 'Monto', 'Moneda', 'Pagó', 'Entre']].concat(
-    vivos(DB[t]).map(x => [new Date(x.date || x.createdAt).toLocaleDateString('es-AR'), x.desc, L.fromCents(x.amount), x.currency, x.payer, x.split.join(', ')]));
+    vivos(DB[t]).filter(x => x.type !== 'fx').map(x => [new Date(x.date || x.createdAt).toLocaleDateString('es-AR'), x.desc, L.fromCents(x.amount), x.currency, x.payer, x.split.join(', ')]));
   const tsv = filas.map(f => f.join('\t')).join('\n');
   try { await navigator.clipboard.writeText(tsv); toast('Copiado: pegalo en una planilla'); } catch (e) { prompt('Copiá:', tsv); }
 }
@@ -339,6 +432,7 @@ function crearViaje() {
 let form = null;
 function modalGasto(t, id) {
   const v = DB[t], g = id ? v.expenses.find(x => x.id === id) : null;
+  if (g && g.type === 'fx') return deshacerFx(t, id);
   form = g ? { ...g, split: [...g.split] } : {
     id: nuevoId(), desc: '', amount: 0, currency: v.ultimaMoneda || v.trip.currencies[0],
     payer: v.me, split: [...v.trip.people], createdAt: Date.now(), date: Date.now(), by: v.me
