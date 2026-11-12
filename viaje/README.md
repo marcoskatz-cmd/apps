@@ -35,10 +35,9 @@ clasp push -f
 clasp redeploy AKfycbyMR59LmltIUGj6HjplaXPKolizjRWmY38M-I3pVGCIyMwXKTliMiHuC1fxwZZdKlGjVg -d "descripción"
 ```
 
-Puesta en marcha (una sola vez, ya hecha si el tablero responde):
-1. En el editor del script, elegir `setup` y tocar **Ejecutar**; aceptar permisos ("app no verificada" → Avanzado → Ir a…).
-2. **Compartir** el script como "Cualquier persona con el enlace · Lector". Sin esto Apps Script responde
-   "Access Denied" a quien no tiene sesión de Google (mismo esquema que Combustible).
+Puesta en marcha (una sola vez): en el editor del script elegir `setup` y tocar **Ejecutar**, aceptando los permisos
+("app no verificada" → Avanzado → Ir a…). Hasta que el dueño autoriza, Apps Script responde "Access Denied" a todos.
+El script queda privado, como Expedientes: no hace falta compartirlo.
 
 ## Cómo se usa
 
