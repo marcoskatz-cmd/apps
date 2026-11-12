@@ -20,21 +20,25 @@ App para dividir gastos de un viaje en grupo, tipo Splitwise, con una diferencia
 | `backend.gs` | Servidor en Google Apps Script que guarda todo en una planilla |
 | `sw.js`, `manifest.json` | Para que funcione offline y se pueda instalar |
 
-## Conectar el servidor (una sola vez, ~5 minutos)
+## Servidor (Apps Script + planilla, publicado con clasp)
 
-Sin este paso la app funciona, pero cada celular ve solo lo suyo.
+| Qué | Dónde |
+|---|---|
+| Planilla | "Gastos de viaje — datos", id `1FgNO-g5-JjBNJJ4w1pfArniqXZ1XwKJyp70ckH5G_7s` |
+| Script (independiente, como Combustible) | "Gastos de viaje", scriptId `1BpfKEA5Oi9uuS6wIqUEt-KdnUevKnRsXhAmdumMmSu7PNvmTn_EkPpPr` |
+| Implementación | `AKfycbyMR59LmltIUGj6HjplaXPKolizjRWmY38M-I3pVGCIyMwXKTliMiHuC1fxwZZdKlGjVg` |
 
-1. Crear una planilla de Google nueva, por ejemplo "Gastos de viaje — datos".
-2. En la planilla: **Extensiones → Apps Script**. Borrar lo que haya y pegar el contenido de `backend.gs`. Guardar.
-3. **Implementar → Nueva implementación → tipo Aplicación web**.
-   - Ejecutar como: **Yo**.
-   - Quién tiene acceso: **Cualquier persona**.
-   - Autorizar cuando lo pida.
-4. Copiar la URL que termina en `/exec` y pegarla en `index.html`, en `const API_URL = '...'`.
-5. Pushear. GitHub Pages actualiza en 1 a 3 minutos.
+`backend.gs` es el `Code.js` del proyecto clasp. Para actualizar sin cambiar la URL:
 
-Si después se cambia `backend.gs`: Implementar → Administrar implementaciones → lápiz → Nueva versión.
-No usar "Nueva implementación" porque cambia la URL.
+```bash
+clasp push -f
+clasp redeploy AKfycbyMR59LmltIUGj6HjplaXPKolizjRWmY38M-I3pVGCIyMwXKTliMiHuC1fxwZZdKlGjVg -d "descripción"
+```
+
+Puesta en marcha (una sola vez, ya hecha si el tablero responde):
+1. En el editor del script, elegir `setup` y tocar **Ejecutar**; aceptar permisos ("app no verificada" → Avanzado → Ir a…).
+2. **Compartir** el script como "Cualquier persona con el enlace · Lector". Sin esto Apps Script responde
+   "Access Denied" a quien no tiene sesión de Google (mismo esquema que Combustible).
 
 ## Cómo se usa
 
