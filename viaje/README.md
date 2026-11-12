@@ -50,3 +50,9 @@ Así queda guardada y funciona aunque allá no cargue GitHub.
 
 El link del viaje es la única llave. Tiene 22 caracteres aleatorios, así que no se adivina,
 pero cualquiera que lo reciba puede ver y cargar gastos de ese viaje.
+
+## Servidor actual (nov-2026)
+
+- Planilla: "Gastos de viaje — datos" (Drive de marcoskatz@grupoingeco.com.ar), id `1FgNO-g5-JjBNJJ4w1pfArniqXZ1XwKJyp70ckH5G_7s`.
+- Script vinculado: id `14TTZVg1jdly5s9rPueXnTlur5hAohzg6gIPB-KCN_wJMigCv7KdI_hzI`, publicado con clasp.
+- Para actualizar sin cambiar la URL: `clasp push` y luego `clasp create-deployment -i <deploymentId>` sobre la implementación existente.
