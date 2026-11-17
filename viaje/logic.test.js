@@ -118,3 +118,45 @@ test('summary: pagó, parte, pagos y saldo', () => {
   assert.strictEqual(s.Beto.saldo, 0);
   assert.strictEqual(s.Caro.saldo, -300);
 });
+
+test('netea entre todos: cadena larga en varias monedas queda en un pago por moneda', () => {
+  const ex = [
+    e('B', 1000, 'USD', ['A']), e('C', 1000, 'USD', ['B']), e('D', 1000, 'USD', ['C']),
+    e('B', 500, 'CNY', ['A']), e('C', 500, 'CNY', ['B']),
+  ];
+  assert.deepStrictEqual(L.settleAll(ex), {
+    CNY: [{ from: 'A', to: 'C', amount: 500 }],
+    USD: [{ from: 'A', to: 'D', amount: 1000 }],
+  });
+});
+
+test('mínimo exacto donde el greedy hace un pago de más', () => {
+  // A debe 4, B y E deben 3; a C le deben 6 y a D 4. Lo mínimo son 3 pagos: A→D, B→C, E→C.
+  const tx = L.settle({ A: -400, B: -300, E: -300, C: 600, D: 400 });
+  assert.strictEqual(tx.length, 3);
+  assert.deepStrictEqual(tx.find(t => t.from === 'A'), { from: 'A', to: 'D', amount: 400 });
+});
+
+test('siempre da el mínimo de pagos y salda exacto (comparado con fuerza bruta)', () => {
+  // máximo de grupos que suman cero, por fuerza bruta independiente
+  const maxGrupos = vals => {
+    if (!vals.length) return 0;
+    const [x, ...rest] = vals; let best = 0;
+    for (let m = 0; m < 1 << rest.length; m++) {
+      const dentro = rest.filter((_, i) => m & (1 << i)), fuera = rest.filter((_, i) => !(m & (1 << i)));
+      if (dentro.reduce((a, b) => a + b, x) === 0) best = Math.max(best, 1 + maxGrupos(fuera));
+    }
+    return best;
+  };
+  for (let caso = 0; caso < 300; caso++) {
+    const n = 2 + (caso % 7), bal = {}, ps = [];
+    let tot = 0;
+    for (let i = 0; i < n - 1; i++) { const v = (1 + Math.floor(Math.random() * 6)) * (Math.random() < 0.5 ? -100 : 100); bal['P' + i] = v; tot += v; ps.push('P' + i); }
+    bal['P' + (n - 1)] = -tot; ps.push('P' + (n - 1));
+    const tx = L.settle(bal), net = {};
+    for (const t of tx) { assert.ok(t.amount > 0); net[t.from] = (net[t.from] || 0) + t.amount; net[t.to] = (net[t.to] || 0) - t.amount; }
+    for (const p of ps) assert.strictEqual((net[p] || 0) + bal[p], 0);
+    const vals = Object.values(bal).filter(v => v);
+    assert.strictEqual(tx.length, vals.length - maxGrupos(vals));
+  }
+});

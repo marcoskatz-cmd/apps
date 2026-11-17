@@ -45,7 +45,8 @@ El script queda privado, como Expedientes: no hace falta compartirlo.
 1. Crear el viaje con las personas y las monedas (CNY, USD, ARS por defecto).
 2. Viaje → Compartir link, y mandarlo al grupo por WhatsApp. Cada uno elige quién es.
 3. Cargar gastos: monto, moneda, quién pagó y entre quiénes (partes iguales).
-4. Saldos muestra las transferencias mínimas por moneda. "Ya pagó" registra el pago y lo descuenta.
+4. Saldos muestra las transferencias mínimas por moneda, neteando entre todos (si Ana le debe a Beto y Beto a Caro,
+   paga Ana directo a Caro). Es el mínimo exacto hasta 16 personas con saldo en esa moneda. "Ya pagó" registra el pago y lo descuenta.
 
 Para viajar a China: abrir el link e instalar la app en cada celular **antes de salir**.
 Así queda guardada y funciona aunque allá no cargue GitHub.

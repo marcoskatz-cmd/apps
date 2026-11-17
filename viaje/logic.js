@@ -64,10 +64,10 @@
     return out;
   }
 
-  // Transferencias mínimas (greedy) dentro de UNA moneda.
-  function settle(bal) {
+  // Greedy (el que más debe le paga al que más le deben). Con n personas da como mucho n-1 pagos.
+  function settleGreedy(entries) {
     const cred = [], debt = [];
-    for (const [p, v] of Object.entries(bal)) {
+    for (const [p, v] of entries) {
       if (v > 0) cred.push([p, v]); else if (v < 0) debt.push([p, -v]);
     }
     const byAmt = (a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1);
@@ -80,6 +80,41 @@
       debt[i][1] -= m; cred[j][1] -= m;
       if (!debt[i][1]) i++;
       if (!cred[j][1]) j++;
+    }
+    return tx;
+  }
+
+  // Transferencias mínimas dentro de UNA moneda, netendo entre TODOS (si A le debe a B y B a C, paga A a C).
+  // El mínimo es (personas con saldo) − (grupos que se cancelan solos), así que se busca partir a la gente
+  // en la mayor cantidad posible de grupos que suman cero y se salda cada grupo por separado.
+  // Exacto hasta EXACTO_MAX personas con saldo (2^n, instantáneo en el celular); con más, greedy.
+  const EXACTO_MAX = 16;
+  function settle(bal) {
+    const gente = Object.entries(bal).filter(([, v]) => v)
+      .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]) || (a[0] < b[0] ? -1 : 1));
+    const n = gente.length;
+    if (n < 3 || n > EXACTO_MAX) return settleGreedy(gente);
+    const full = (1 << n) - 1;
+    const suma = new Float64Array(full + 1), grupos = new Int8Array(full + 1), quito = new Int8Array(full + 1);
+    for (let m = 1; m <= full; m++) {
+      const i = 31 - Math.clz32(m & -m);
+      suma[m] = suma[m & (m - 1)] + gente[i][1];
+      let mejor = -1;
+      for (let k = 0; k < n; k++) {
+        if (!(m & (1 << k))) continue;
+        const g = grupos[m ^ (1 << k)];
+        if (g > mejor) { mejor = g; quito[m] = k; }
+      }
+      grupos[m] = mejor + (suma[m] === 0 ? 1 : 0);
+    }
+    // Reconstruir: al recorrer hacia atrás, cada vez que lo que queda suma cero se cierra un grupo.
+    const tx = [];
+    let m = full, grupo = [];
+    while (m) {
+      const k = quito[m];
+      grupo.push(gente[k]);
+      m ^= 1 << k;
+      if (suma[m] === 0) { tx.push(...settleGreedy(grupo)); grupo = []; }
     }
     return tx;
   }
