@@ -157,6 +157,36 @@
     return out;
   }
 
+  // Detalle de una fila del resumen: de qué gastos sale lo que pagó, lo que le tocaba, los pagos y las conversiones.
+  // Montos con el signo con que entran al saldo: saldo = pagado − parte + pagos + convertido.
+  function detail(expenses, cur, person) {
+    const out = { pagado: [], parte: [], pagos: [], convertido: [] };
+    const cuando = x => x.date || x.createdAt || 0;
+    const ordenados = [...expenses].filter(x => !x.deleted).sort((a, b) => cuando(a) - cuando(b));
+    for (const e of ordenados) {
+      if (e.type === 'fx') {
+        const de = (e.amounts || {})[person], a = (e.conv || {})[person];
+        if (e.from === cur && de) out.convertido.push({ id: e.id, amount: -de, hacia: e.to, otro: a || 0, rate: e.rate });
+        if (e.to === cur && a) out.convertido.push({ id: e.id, amount: a, desde: e.from, otro: de || 0, rate: e.rate });
+        continue;
+      }
+      if (e.currency !== cur || !e.split || !e.split.length) continue;
+      const base = { id: e.id, desc: e.desc, date: cuando(e) };
+      if (e.settlement) {
+        if (e.payer === person) out.pagos.push({ ...base, amount: e.amount, a: e.split[0] });
+        if (e.split[0] === person) out.pagos.push({ ...base, amount: -e.amount, de: e.payer });
+        continue;
+      }
+      if (e.payer === person) out.pagado.push({ ...base, amount: e.amount, total: e.amount, entre: e.split.length });
+      const i = e.split.indexOf(person);
+      if (i >= 0) out.parte.push({ ...base, amount: splitEqual(e.amount, e.split.length)[i], total: e.amount, entre: e.split.length });
+    }
+    const suma = l => l.reduce((s, x) => s + x.amount, 0);
+    out.totales = { pagado: suma(out.pagado), parte: suma(out.parte), pagos: suma(out.pagos), convertido: suma(out.convertido) };
+    out.saldo = out.totales.pagado - out.totales.parte + out.totales.pagos + out.totales.convertido;
+    return out;
+  }
+
   // Une listas por id; gana el updatedAt mayor.
   function mergeById(a, b) {
     const m = new Map();
@@ -167,7 +197,7 @@
     return [...m.values()];
   }
 
-  const api = { parseNum, toCents, fromCents, splitEqual, convertBalances, balances, settle, settleAll, summary, mergeById };
+  const api = { parseNum, toCents, fromCents, splitEqual, convertBalances, balances, settle, settleAll, summary, detail, mergeById };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else g.ViajeLogic = api;
 })(typeof self !== 'undefined' ? self : this);

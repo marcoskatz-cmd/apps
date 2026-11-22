@@ -160,3 +160,42 @@ test('siempre da el mínimo de pagos y salda exacto (comparado con fuerza bruta)
     assert.strictEqual(tx.length, vals.length - maxGrupos(vals));
   }
 });
+
+test('detail: explica de qué gastos sale cada número', () => {
+  const ex = [
+    { id: '1', desc: 'Cena', payer: 'Ana', amount: 900, currency: 'CNY', split: ['Ana', 'Beto', 'Caro'], date: 1 },
+    { id: '2', desc: 'Taxi', payer: 'Beto', amount: 100, currency: 'CNY', split: ['Ana', 'Beto'], date: 2 },
+    { id: '3', desc: 'Pago', payer: 'Beto', amount: 300, currency: 'CNY', split: ['Ana'], settlement: true, date: 3 },
+    { id: '4', desc: 'Museo', payer: 'Ana', amount: 50, currency: 'USD', split: ['Ana', 'Beto'], date: 4 },
+    { id: '5', desc: 'Borrado', payer: 'Ana', amount: 999, currency: 'CNY', split: ['Ana'], deleted: true },
+  ];
+  const d = L.detail(ex, 'CNY', 'Ana');
+  assert.deepStrictEqual(d.pagado.map(x => [x.desc, x.amount]), [['Cena', 900]]);
+  assert.deepStrictEqual(d.parte.map(x => [x.desc, x.amount, x.entre]), [['Cena', 300, 3], ['Taxi', 50, 2]]);
+  assert.deepStrictEqual(d.pagos.map(x => [x.amount, x.de]), [[-300, 'Beto']]);
+  assert.deepStrictEqual(d.totales, { pagado: 900, parte: 350, pagos: -300, convertido: 0 });
+  assert.strictEqual(d.saldo, 250);
+  const b = L.detail(ex, 'CNY', 'Beto');
+  assert.deepStrictEqual(b.pagos.map(x => [x.amount, x.a]), [[300, 'Ana']]);
+});
+
+test('detail: el saldo coincide siempre con el resumen, con conversiones incluidas', () => {
+  const ex = [
+    e('Ana', 1000, 'CNY', ['Ana', 'Beto', 'Caro']),
+    e('Beto', 500, 'USD', ['Ana', 'Beto']),
+    e('Caro', 200, 'CNY', ['Beto'], { settlement: true }),
+  ];
+  const b = L.balances(ex), amounts = {};
+  for (const [p, v] of Object.entries(b.CNY)) if (v) amounts[p] = v;
+  ex.push({ id: 'fx', type: 'fx', from: 'CNY', to: 'USD', rate: 0.14, amounts, conv: L.convertBalances(amounts, 0.14), createdAt: 9 });
+  const s = L.summary(ex);
+  for (const cur of Object.keys(s)) for (const p of Object.keys(s[cur])) {
+    const d = L.detail(ex, cur, p);
+    assert.strictEqual(d.saldo, s[cur][p].saldo, `${cur} ${p}`);
+    assert.strictEqual(d.totales.pagado, s[cur][p].pagado);
+    assert.strictEqual(d.totales.parte, s[cur][p].parte);
+  }
+  const ana = L.detail(ex, 'CNY', 'Ana');
+  assert.strictEqual(ana.saldo, 0);
+  assert.strictEqual(ana.convertido[0].hacia, 'USD');
+});
