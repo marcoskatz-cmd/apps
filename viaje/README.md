@@ -47,6 +47,8 @@ El script queda privado, como Expedientes: no hace falta compartirlo.
 3. Cargar gastos: monto, moneda, quién pagó y entre quiénes (partes iguales).
 4. Saldos muestra las transferencias mínimas por moneda, neteando entre todos (si Ana le debe a Beto y Beto a Caro,
    paga Ana directo a Caro). Es el mínimo exacto hasta 16 personas con saldo en esa moneda. "Ya pagó" registra el pago y lo descuenta.
+5. En el resumen por persona (Pagó / Le tocaba / Saldo), tocar una fila muestra el detalle: qué gastos pagó,
+   su parte de cada gasto, los pagos entre ustedes, las conversiones y la cuenta que da el saldo (`detail()` en `logic.js`).
 
 Para viajar a China: abrir el link e instalar la app en cada celular **antes de salir**.
 Así queda guardada y funciona aunque allá no cargue GitHub.
